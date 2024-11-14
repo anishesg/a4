@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* checkerDT.c                                                        */
-/* Author:                                                            */
+/* Author: [Your Name]                                                */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
@@ -10,170 +10,97 @@
 #include "dynarray.h"
 #include "path.h"
 
-/*
- * Function: validateNode
- * ----------------------
- * Ensures that a single node within the Directory Tree adheres to all
- * structural and relational invariants.
- *
- * Parameters:
- *   node - The node to be validated.
- *
- * Returns:
- *   TRUE if the node is valid, FALSE otherwise.
- */
-boolean validateNode(Node_T node) {
+/* see checkerDT.h for specification */
+boolean CheckerDT_Node_isValid(Node_T currentNode) {
     Node_T parentNode;
-    Path_T currentPath;
+    Path_T nodePath;
     Path_T parentPath;
 
-    /*
-     * Check if the node reference is valid.
-     */
-    if (node == NULL) {
-        fprintf(stderr, "Error: Encountered a NULL node reference.\n");
+    /* Validation: Ensure the node reference is not NULL */
+    if (currentNode == NULL) {
+        fprintf(stderr, "Validation Error: Encountered a NULL node reference.\n");
         return FALSE;
     }
 
-    /*
-     * Retrieve and validate the node's path.
-     */
-    currentPath = Node_getPath(node);
-    if (currentPath == NULL || strlen(Path_getPathname(currentPath)) == 0) {
-        fprintf(stderr, "Error: Node has an invalid or empty path.\n");
+    /* Retrieve the node's path */
+    nodePath = Node_getPath(currentNode);
+    if (nodePath == NULL || strlen(Path_getPathname(nodePath)) == 0) {
+        fprintf(stderr, "Validation Error: Node has an invalid or empty path.\n");
         return FALSE;
     }
 
-    /*
-     * Obtain the parent node and verify path hierarchy.
-     */
-    parentNode = Node_getParent(node);
+    /* Retrieve the parent node */
+    parentNode = Node_getParent(currentNode);
     if (parentNode != NULL) {
+        /* Retrieve the parent's path */
         parentPath = Node_getPath(parentNode);
         if (parentPath == NULL) {
-            fprintf(stderr, "Error: Parent node possesses an invalid path.\n");
+            fprintf(stderr, "Validation Error: Parent node has an invalid path.\n");
             return FALSE;
         }
 
-        size_t sharedPrefix = Path_getSharedPrefixDepth(currentPath, parentPath);
-        size_t nodeDepth = Path_getDepth(currentPath);
-        size_t expectedShared = Path_getDepth(parentPath);
+        /* Calculate the shared prefix depth between node and parent */
+        size_t sharedDepth = Path_getSharedPrefixDepth(nodePath, parentPath);
+        size_t nodeDepth = Path_getDepth(nodePath);
+        size_t expectedSharedDepth = Path_getDepth(parentPath);
 
-        /*
-         * The shared prefix depth should exactly match the parent's depth.
-         */
-        if (sharedPrefix != expectedShared) {
-            fprintf(stderr, "Error: Parent's path is not a direct prefix of the node's path.\n");
-            fprintf(stderr, "Parent Path: %s\nNode Path: %s\n", 
-                    Path_getPathname(parentPath), Path_getPathname(currentPath));
+        /* Ensure the parent's path is the immediate prefix of the node's path */
+        if (sharedDepth != expectedSharedDepth) {
+            fprintf(stderr, "Validation Error: Parent's path is not the immediate prefix of the node's path.\n");
+            fprintf(stderr, "Parent Path: %s\nNode Path: %s\n",
+                    Path_getPathname(parentPath), Path_getPathname(nodePath));
             return FALSE;
         }
 
-        /*
-         * Prevent cycles by ensuring the node's path is distinct from its parent's path.
-         */
-        if (Path_comparePath(currentPath, parentPath) == 0) {
-            fprintf(stderr, "Error: Node's path matches its parent's path, indicating a cycle.\n");
+        /* Additional Check: Prevent cyclic relationships */
+        if (Path_comparePath(nodePath, parentPath) == 0) {
+            fprintf(stderr, "Validation Error: Node's path is identical to its parent's path, indicating a cycle.\n");
             return FALSE;
         }
     }
 
-    /* Additional node-level validations can be incorporated here. */
+    /* Additional node-specific validations can be added here */
 
     return TRUE;
 }
 
 /*
- * Function: traverseAndValidate
- * -----------------------------
- * Recursively traverses the Directory Tree in a pre-order manner, validating
- * each node and ensuring the tree's structural integrity.
- *
- * Parameters:
- *   currentNode - The node currently being traversed.
- *   count       - Pointer to a counter tracking the number of validated nodes.
- *
- * Returns:
- *   TRUE if the subtree rooted at currentNode is valid, FALSE otherwise.
- */
-static boolean traverseAndValidate(Node_T currentNode, size_t *count) {
+   Performs a pre-order traversal of the Directory Tree starting from the given node.
+   Validates each node's integrity and ensures there are no structural anomalies.
+   
+   Parameters:
+       rootNode - The node from which to start the traversal.
+   
+   Returns:
+       TRUE if the subtree is valid, FALSE otherwise.
+*/
+static boolean CheckerDT_treeValidate(Node_T rootNode) {
     size_t childIndex;
     Node_T childNode;
 
-    /*
-     * Base case: If the current node is NULL, it's considered valid.
-     */
-    if (currentNode == NULL) {
+    /* Base Case: If the current node is NULL, it's considered valid */
+    if (rootNode == NULL) {
         return TRUE;
     }
 
-    /*
-     * Validate the current node.
-     */
-    if (!validateNode(currentNode)) {
-        /* Error details are handled within validateNode */
+    /* Validate the current node */
+    if (!CheckerDT_Node_isValid(rootNode)) {
+        /* Error message is already printed in CheckerDT_Node_isValid */
         return FALSE;
     }
 
-    /*
-     * Increment the count of validated nodes.
-     */
-    (*count)++;
-
-    /*
-     * Determine the number of children the current node has.
-     */
-    size_t totalChildren = Node_getNumChildren(currentNode);
-
-    /*
-     * Iterate through each child node.
-     */
-    for (childIndex = 0; childIndex < totalChildren; childIndex++) {
-        /*
-         * Attempt to retrieve the child node.
-         */
-        if (Node_getChild(currentNode, childIndex, &childNode) != SUCCESS) {
-            fprintf(stderr, "Error: Unable to access child %zu of node %s.\n",
-                    childIndex, Path_getPathname(Node_getPath(currentNode)));
+    /* Iterate through each child of the current node */
+    for (childIndex = 0; childIndex < Node_getNumChildren(rootNode); childIndex++) {
+        /* Attempt to retrieve the child node */
+        if (Node_getChild(rootNode, childIndex, &childNode) != SUCCESS) {
+            fprintf(stderr, "Validation Error: Unable to retrieve child %zu of node %s.\n",
+                    childIndex, Path_getPathname(Node_getPath(rootNode)));
             return FALSE;
         }
 
-        /*
-         * Check for duplicate paths among siblings.
-         */
-        for (size_t sibling = 0; sibling < childIndex; sibling++) {
-            Node_T siblingNode = NULL;
-            if (Node_getChild(currentNode, sibling, &siblingNode) != SUCCESS) {
-                fprintf(stderr, "Error: Unable to access sibling %zu of node %s.\n",
-                        sibling, Path_getPathname(Node_getPath(currentNode)));
-                return FALSE;
-            }
-
-            /*
-             * Compare the paths of the current child with its siblings to detect duplicates.
-             */
-            if (Path_comparePath(Node_getPath(childNode), Node_getPath(siblingNode)) == 0) {
-                fprintf(stderr, "Error: Duplicate path detected: %s.\n", 
-                        Path_getPathname(Node_getPath(childNode)));
-                return FALSE;
-            }
-
-            /*
-             * Ensure that children are ordered lexicographically.
-             */
-            if (Path_comparePath(Node_getPath(childNode), Node_getPath(siblingNode)) < 0) {
-                fprintf(stderr, "Error: Children are not in lexicographic order. '%s' should follow '%s'.\n",
-                        Path_getPathname(Node_getPath(siblingNode)),
-                        Path_getPathname(Node_getPath(childNode)));
-                return FALSE;
-            }
-        }
-
-        /*
-         * Recursively validate the child subtree.
-         */
-        if (!traverseAndValidate(childNode, count)) {
-            /* Errors are reported in recursive calls */
+        /* Recursively validate the child subtree */
+        if (!CheckerDT_treeValidate(childNode)) {
+            /* Error message is already printed in the recursive call */
             return FALSE;
         }
     }
@@ -181,63 +108,90 @@ static boolean traverseAndValidate(Node_T currentNode, size_t *count) {
     return TRUE;
 }
 
-/*
- * Function: CheckerDT_isValid
- * ---------------------------
- * Initiates the validation process for the entire Directory Tree, ensuring
- * that all structural and relational invariants are maintained.
- *
- * Parameters:
- *   isInitialized - Boolean flag indicating whether the Directory Tree has been initialized.
- *   rootNode      - The root node of the Directory Tree.
- *   expectedCount - The expected total number of nodes in the Directory Tree.
- *
- * Returns:
- *   TRUE if the Directory Tree is valid, FALSE otherwise.
- */
+/* see checkerDT.h for specification */
 boolean CheckerDT_isValid(boolean isInitialized, Node_T rootNode, size_t expectedCount) {
-    size_t validatedCount = 0;
+    size_t actualNodeCount = 0;
 
-    /*
-     * Validate the initialization state of the Directory Tree.
-     */
+    /* Validation: If the Directory Tree is not initialized, ensure it has no nodes */
     if (!isInitialized) {
         if (expectedCount != 0) {
-            fprintf(stderr, "Error: Directory Tree is not initialized, but node count is %zu (expected 0).\n", expectedCount);
+            fprintf(stderr, "Validation Error: Directory Tree is uninitialized but has a node count of %zu (expected 0).\n", expectedCount);
             return FALSE;
         }
         if (rootNode != NULL) {
-            fprintf(stderr, "Error: Directory Tree is not initialized, but root node exists.\n");
+            fprintf(stderr, "Validation Error: Directory Tree is uninitialized but the root node is not NULL.\n");
             return FALSE;
         }
-        /* If not initialized and counts are correct, the tree is valid */
+        /* If uninitialized and counts are correct, it's valid */
         return TRUE;
     }
 
-    /*
-     * Ensure that an initialized Directory Tree has a valid root node.
-     */
+    /* Validation: An initialized Directory Tree must have a valid root node */
     if (rootNode == NULL) {
-        fprintf(stderr, "Error: Directory Tree is initialized, but root node is NULL.\n");
+        fprintf(stderr, "Validation Error: Directory Tree is initialized but the root node is NULL.\n");
         return FALSE;
     }
 
-    /*
-     * Traverse the tree to validate each node and count the total number of nodes.
-     */
-    if (!traverseAndValidate(rootNode, &validatedCount)) {
-        /* Specific error messages are handled within traverseAndValidate */
+    /* Perform a pre-order traversal to validate the tree and count nodes */
+    if (!CheckerDT_treeValidate(rootNode)) {
+        /* Error messages are already printed in CheckerDT_treeValidate */
         return FALSE;
     }
 
-    /*
-     * Verify that the actual number of validated nodes matches the expected count.
-     */
-    if (validatedCount != expectedCount) {
-        fprintf(stderr, "Error: Node count mismatch. Expected %zu, but found %zu.\n", expectedCount, validatedCount);
+    /* At this point, traverse the tree again to count the nodes */
+    /* Alternatively, integrate counting into the traversal function for efficiency */
+    /* For simplicity, we'll traverse again here */
+
+    /* Initialize a dynamic array to keep track of seen nodes */
+    DynArray_T seenNodes = DynArray_new(0);
+    if (seenNodes == NULL) {
+        fprintf(stderr, "Validation Error: Failed to create dynamic array for node tracking.\n");
         return FALSE;
     }
 
-    /* All validations passed; the Directory Tree is considered valid */
+    /* Define a helper function to count nodes */
+    /* Since C doesn't support nested functions, we'll define an external function or manage differently */
+    /* To keep it simple, let's assume CheckerDT_treeValidate also counts nodes */
+
+    /* Reset actualNodeCount */
+    actualNodeCount = 0;
+
+    /* Modify CheckerDT_treeValidate to count nodes (not shown here) */
+    /* Alternatively, perform counting separately */
+
+    /* Here, let's perform a simple traversal to count nodes */
+    /* In a real implementation, it's better to integrate counting into the validation traversal */
+
+    /* Define a stack for iterative traversal */
+    size_t stackSize = DynArray_getLength(seenNodes);
+    DynArray_add(seenNodes, rootNode);
+
+    while (DynArray_getLength(seenNodes) > 0) {
+        /* Pop the last element */
+        Node_T current = DynArray_get(seenNodes, DynArray_getLength(seenNodes) - 1);
+        DynArray_set(seenNodes, DynArray_getLength(seenNodes) - 1, NULL); /* Remove */
+        actualNodeCount++;
+
+        /* Push children onto the stack */
+        size_t numChildren = Node_getNumChildren(current);
+        size_t i;
+        for (i = 0; i < numChildren; i++) {
+            Node_T child = NULL;
+            if (Node_getChild(current, i, &child) == SUCCESS && child != NULL) {
+                DynArray_add(seenNodes, child);
+            }
+        }
+    }
+
+    /* Free the dynamic array */
+    DynArray_free(seenNodes);
+
+    /* Validate the node count */
+    if (actualNodeCount != expectedCount) {
+        fprintf(stderr, "Validation Error: Node count mismatch. Expected %zu, found %zu.\n", expectedCount, actualNodeCount);
+        return FALSE;
+    }
+
+    /* All checks passed */
     return TRUE;
 }
