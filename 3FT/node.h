@@ -1,4 +1,4 @@
-\
+
 #ifndef NODE_INCLUDED
 #define NODE_INCLUDED
 
@@ -7,20 +7,15 @@
 #include "path.h"
 
 
-/* A Node_T is a node in a Directory Tree */
+/* A Node_T is a node in a File Tree */
 typedef struct node *Node_T;
 
-/* specifiy the type of the node. 
-  directories are DIR and files are nFILE
-*/
-enum nodetype {DIR, nFILE};
-/* simplification for the nodetype enum */
-typedef enum nodetype NodeType;
-
 /*
-  Creates a new node in the Directory Tree, with path oPPath and
-  parent oNParent and NodeType nType. 
-  Returns an int SUCCESS status and sets *poNResult
+  Creates a new node in the File Tree, specified as either a directory
+  or file with the isDir boolean, with path oPPath and
+  parent oNParent. If this is a file, the file's contents gets assigned
+  to the contents, and the node's ulLength gets assigned to the passed
+  ulLength. Returns an int SUCCESS status and sets *poNResult
   to be the new node if successful. Otherwise, sets *poNResult to NULL
   and returns status:
   * MEMORY_ERROR if memory could not be allocated to complete request
@@ -30,8 +25,8 @@ typedef enum nodetype NodeType;
                  or oNParent is NULL but oPPath is not of depth 1
   * ALREADY_IN_TREE if oNParent already has a child with this path
 */
-int Node_new(Path_T oPPath, Node_T oNParent, Node_T *poNResult, NodeType 
-nType);
+int Node_new(Path_T oPPath, Node_T oNParent, boolean isDir,
+   void *contents, size_t ulLength, Node_T *poNResult);
 
 /*
   Destroys and frees all memory allocated for the subtree rooted at
@@ -47,13 +42,14 @@ Path_T Node_getPath(Node_T oNNode);
   Returns TRUE if oNParent has a child with path oPPath. Returns
   FALSE if it does not.
 
-  If oNParent has such a child, stores in *pulChildID the child's
+  If oNParent has such a child, type of child specified with isDir
+  boolean, stores in *pulChildID the child's
   identifier (as used in Node_getChild). If oNParent does not have
   such a child, stores in *pulChildID the identifier that such a
   child _would_ have if inserted.
 */
 boolean Node_hasChild(Node_T oNParent, Path_T oPPath,
-                         size_t *pulChildID); 
+                         size_t *pulChildID, boolean isDir);
 
 /* Returns the number of children that oNParent has. */
 size_t Node_getNumChildren(Node_T oNParent);
@@ -74,32 +70,6 @@ int Node_getChild(Node_T oNParent, size_t ulChildID,
 Node_T Node_getParent(Node_T oNNode);
 
 /*
-  Compares oNFirst and oNSecond lexicographically based on their paths.
-  Returns <0, 0, or >0 if onFirst is "less than", "equal to", or
-  "greater than" oNSecond, respectively.
-*/
-int Node_compare(Node_T oNFirst, Node_T oNSecond);
-
-/* Returns the NodeType (nFILE or DIR) of Node_T oNNode */
-NodeType Node_getNodeType(Node_T oNNode);
-
-/* 
-  Adds file contents pvContents to oNNode. Sets length of oNNode to 
-  ulLength. 
-*/
-void Node_addFileContents(Node_T oNNode, void *pvContents, size_t ulLength);
-
-/* Returns a pointer to the contents of file oNNode */
-void* Node_getFileContents(Node_T oNNode);
-
-/* Returns file length of oNNode */
-size_t Node_getFileLength(Node_T oNNode);
-
-/* Replaces file contents of oNNode to pvContents and update file size 
-  to ulLength. Returns the old file contents */
-void* Node_replaceFileContents(Node_T oNNode, void *pvContents, size_t ulLength);
-
-/*
   Returns a string representation for oNNode, or NULL if
   there is an allocation error.
 
@@ -107,5 +77,27 @@ void* Node_replaceFileContents(Node_T oNNode, void *pvContents, size_t ulLength)
   the caller!
 */
 char *Node_toString(Node_T oNNode);
+
+/*
+  Returns the boolean determining if the oNNode is a directory or a file
+*/
+boolean Node_isDirectory(Node_T oNNode);
+
+/*
+  Returns the contents of oNNode if the node is a file
+*/
+void *Node_getContents(Node_T oNNode);
+
+/*
+  Replaces the contents of a file oNNode with pvContents and resets its
+  ulLength to ulNewLength
+*/
+void *Node_replaceContents(Node_T oNNode, void *pvContents,
+   size_t ulNewLength);
+
+/*
+  Returns file content length of oNNode
+*/
+size_t Node_getContentLength(Node_T oNNode);
 
 #endif
