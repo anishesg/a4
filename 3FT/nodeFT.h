@@ -1,22 +1,26 @@
 
-#ifndef NODEFT_INCLUDED
-#define NODEFT_INCLUDED
+
+#ifndef NODE_INCLUDED
+#define NODE_INCLUDED
 
 #include <stddef.h>
 #include "a4def.h"
 #include "path.h"
 
-/* A Node_T is a node in a File Tree */
+typedef enum {
+    IS_FILE,
+    IS_DIRECTORY
+} nodeType;
+
+
+/* A Node_T is a node in a Directory Tree */
 typedef struct node *Node_T;
 
 /*
-  Creates a new node in the File Tree, specified as either a directory
-  or file with the isDir boolean, with path oPPath and
-  parent oNParent. If this is a file, the file's contents gets assigned
-  to the contents, and the node's ulLength gets assigned to the passed
-  ulLength. Returns an int SUCCESS status and sets *poNResult
-  to be the new node if successful. Otherwise, sets *poNResult to NULL
-  and returns status:
+  Creates a new node in the Directory Tree, with nodeType type, with
+  path oPPath and parent oNParent. Returns an int SUCCESS status and
+  sets *poNResult to be the new node if successful. Otherwise, sets
+  *poNResult to NULL and returns status:
   * MEMORY_ERROR if memory could not be allocated to complete request
   * CONFLICTING_PATH if oNParent's path is not an ancestor of oPPath
   * NO_SUCH_PATH if oPPath is of depth 0
@@ -24,12 +28,12 @@ typedef struct node *Node_T;
                  or oNParent is NULL but oPPath is not of depth 1
   * ALREADY_IN_TREE if oNParent already has a child with this path
 */
-int Node_new(Path_T oPPath, Node_T oNParent, boolean isDir,
-   void *contents, size_t ulLength, Node_T *poNResult);
+int Node_new(Path_T oPPath, nodeType type, Node_T oNParent,
+             Node_T *poNResult);
 
 /*
   Destroys and frees all memory allocated for the subtree rooted at
-  oNNode, i.e., deletes this node and all its descendants. Returns the
+  oNNode, i.e., deletes this node and all its descendents. Returns the
   number of nodes deleted.
 */
 size_t Node_free(Node_T oNNode);
@@ -41,17 +45,18 @@ Path_T Node_getPath(Node_T oNNode);
   Returns TRUE if oNParent has a child with path oPPath. Returns
   FALSE if it does not.
 
-  If oNParent has such a child, type of child specified with isDir
-  boolean, stores in *pulChildID the child's
+  If oNParent has such a child, stores in *pulChildID the child's
   identifier (as used in Node_getChild). If oNParent does not have
   such a child, stores in *pulChildID the identifier that such a
   child _would_ have if inserted.
 */
 boolean Node_hasChild(Node_T oNParent, Path_T oPPath,
-                      size_t *pulChildID, boolean isDir);
+                         size_t *pulChildID);
 
-/* Returns the number of children that oNParent has if it is a directory. */
-size_t Node_getNumChildren(Node_T oNParent);
+/* Returns an int SUCCESS status and sets *pulNum to be the number
+of children of oNParent if oNParent is a directory, otherwise returns
+NOT_A_DIRECTORY. */
+int Node_getNumChildren(Node_T oNParent, size_t *pulNum);
 
 /*
   Returns an int SUCCESS status and sets *poNResult to be the child
@@ -63,10 +68,17 @@ int Node_getChild(Node_T oNParent, size_t ulChildID,
                   Node_T *poNResult);
 
 /*
-  Returns the parent node of oNNode.
+  Returns a the parent node of oNNode.
   Returns NULL if oNNode is the root and thus has no parent.
 */
 Node_T Node_getParent(Node_T oNNode);
+
+/*
+  Compares oNFirst and oNSecond lexicographically based on their paths.
+  Returns <0, 0, or >0 if onFirst is "less than", "equal to", or
+  "greater than" oNSecond, respectively.
+*/
+int Node_compare(Node_T oNFirst, Node_T oNSecond);
 
 /*
   Returns a string representation for oNNode, or NULL if
@@ -77,33 +89,20 @@ Node_T Node_getParent(Node_T oNNode);
 */
 char *Node_toString(Node_T oNNode);
 
-/*
-  Returns a boolean indicating if the oNNode is a directory (TRUE) or a file (FALSE).
-*/
-boolean Node_isDirectory(Node_T oNNode);
+/* return the type of oNNode, either IS_FILE or IS_DIRECTORY */
+nodeType Node_getType(Node_T oNNode);
 
-/*
-  Returns the contents of oNNode if the node is a file, or NULL if it's a directory.
-*/
+
+/* Assign the data at *pvContents (which is ulLength bytes long) to
+be the contents of oNNode. Indicate Return BAD_PATH if oNNode is a directory. 
+Otherwise return SUCCESS.*/
+int Node_insertFileContents(Node_T oNNode, void *pvContents, size_t 
+ulLength);
+
+/*  Return a pointer to the contents of oNNode.*/
 void *Node_getContents(Node_T oNNode);
 
-/*
-  Replaces the contents of a file oNNode with pvNewContents and resets its
-  length to ulNewLength. Returns the old contents, or NULL on error.
-*/
-void *Node_replaceContents(Node_T oNNode, void *pvNewContents,
-                           size_t ulNewLength);
+/*  Return the size in bytes of oNNode's contents.*/
+size_t Node_getSize(Node_T oNNode);
 
-/*
-  Returns the content length of a file oNNode, or 0 if the node is a directory.
-*/
-size_t Node_getContentLength(Node_T oNNode);
-
-/*
-  Compares oNFirst and oNSecond lexicographically based on their paths
-  and type (directories vs. files). Returns <0, 0, or >0 if oNFirst is
-  "less than", "equal to", or "greater than" oNSecond, respectively.
-*/
-int Node_compare(Node_T oNFirst, Node_T oNSecond);
-
-#endif /* NODEFT_INCLUDED */
+#endif

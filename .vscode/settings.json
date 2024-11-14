@@ -5,6 +5,8 @@
         "string.h": "c",
         "dynarray.h": "c",
         "stdlib.h": "c",
-        "a4def.h": "c"
+        "a4def.h": "c",
+        "nodeft.h": "c",
+        "ft.h": "c"
     }
 }
