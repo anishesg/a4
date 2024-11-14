@@ -10,40 +10,48 @@
 #include "dynarray.h"
 #include "path.h"
 
-/* forward declaration */
+/* forward declarations */
 static boolean CheckerDT_treeCheck(Node_T oNNode);
 
-/* 
- * static variable to keep track of actual node count during traversal.
- * we use this to ensure that the reported node count aligns with 
- * the actual number of nodes in the tree.
+/*
+ * we use this static variable to keep track of the actual node count
+ * during traversal. it helps us ensure that the reported node count
+ * matches the actual number of nodes in the tree.
  */
 static size_t ulVerifiedNodeCount = 0;
 
-/* 
- * this function checks if the child node `oChildNode` at index `childIndex` 
- * has its parent pointer correctly referencing the expected parent node `oParentNode`.
- * it ensures that the child node points back to its parent node.
- * the function returns TRUE if the parent reference is correct, and FALSE otherwise.
+/*
+ * the function CheckerDT_validateChildParentReference checks if a child node's
+ * parent pointer correctly references the expected parent node. this ensures that
+ * each child node points back to the correct parent.
+ *
+ * it takes the expected parent node 'oParentNode', the child node 'oChildNode',
+ * and the index of the child within its parent's list 'childIndex'.
+ *
+ * the function returns TRUE if the parent reference is correct, or FALSE otherwise.
  */
 static boolean CheckerDT_validateChildParentReference(Node_T oParentNode, Node_T oChildNode, size_t childIndex) {
     Node_T oActualParent = Node_getParent(oChildNode);
-    
+
     if (oActualParent != oParentNode) {
         fprintf(stderr, "validation error: child node at index %lu has an incorrect parent reference.\n"
-                        "expected parent: %p, found parent: %p.\n", 
+                        "expected parent: %p, found parent: %p.\n",
                 (unsigned long)childIndex, (void*)oParentNode, (void*)oActualParent);
         return FALSE;
     }
-    
+
     return TRUE;
 }
 
-/* 
- * this function checks for duplicate child nodes under the parent node `oParentNode`.
- * it compares the current child node `oChildNode` at index `currentIndex` with all previously processed child nodes.
- * we ensure that there aren't two nodes with the same name under the same parent.
- * the function returns TRUE if no duplicates are found, and FALSE otherwise.
+/*
+ * the function CheckerDT_checkForDuplicateChildren checks for duplicate child nodes by
+ * comparing the current child with all previously processed child nodes under the same parent.
+ * this ensures that there aren't two nodes with the same name under the same parent node.
+ *
+ * it takes the parent node 'oParentNode', the child node 'oChildNode', and the index of the
+ * current child within the parent's list 'currentIndex'.
+ *
+ * the function returns TRUE if there are no duplicates found, or FALSE if a duplicate is detected.
  */
 static boolean CheckerDT_checkForDuplicateChildren(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
     size_t compareIdx;
@@ -54,7 +62,7 @@ static boolean CheckerDT_checkForDuplicateChildren(Node_T oParentNode, Node_T oC
         status = Node_getChild(oParentNode, compareIdx, &oComparisonNode);
         if (status != SUCCESS) {
             fprintf(stderr, "validation error: failed to retrieve comparison child node at index %lu.\n"
-                            "Node_getChild returned status: %d.\n", 
+                            "Node_getChild returned status: %d.\n",
                     (unsigned long)compareIdx, status);
             return FALSE;
         }
@@ -70,11 +78,16 @@ static boolean CheckerDT_checkForDuplicateChildren(Node_T oParentNode, Node_T oC
     return TRUE;
 }
 
-/* 
- * this function ensures that child nodes under the parent node `oParentNode` 
- * are stored in lexicographical order.
- * it checks the current child node `oChildNode` at index `currentIndex` against its previous sibling.
- * the function returns TRUE if the child nodes are in lexicographical order, and FALSE otherwise.
+/*
+ * the function CheckerDT_verifyLexicographicalOrder ensures that child nodes are stored
+ * in lexicographical order within their parent's list. it checks if each child node is
+ * in the correct position relative to its neighboring nodes.
+ *
+ * it takes the parent node 'oParentNode', the child node 'oChildNode', and the index of the
+ * current child within the parent's list 'currentIndex'.
+ *
+ * the function returns TRUE if the child nodes are in the correct lexicographical order,
+ * or FALSE if an ordering violation is detected.
  */
 static boolean CheckerDT_verifyLexicographicalOrder(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
     if (currentIndex > 0) {
@@ -92,7 +105,7 @@ static boolean CheckerDT_verifyLexicographicalOrder(Node_T oParentNode, Node_T o
         if (strcmp(Path_getPathname(Node_getPath(oPrevChildNode)),
                    Path_getPathname(Node_getPath(oChildNode))) > 0) {
             fprintf(stderr, "validation error: children are not in lexicographic order between indices %lu and %lu.\n"
-                            "make sure children nodes are sorted lexicographically.\n",
+                            "make sure child nodes are sorted lexicographically.\n",
                     (unsigned long)(currentIndex - 1), (unsigned long)currentIndex);
             return FALSE;
         }
@@ -101,10 +114,15 @@ static boolean CheckerDT_verifyLexicographicalOrder(Node_T oParentNode, Node_T o
     return TRUE;
 }
 
-/* 
- * this function validates a single child node under the parent node `oParentNode` at index `childIndex`.
- * it performs parent reference check, duplicate detection, and lexicographical order verification.
- * the function returns TRUE if the child node passes all checks, and FALSE otherwise.
+/*
+ * the function CheckerDT_validateChildNode checks a single child node to ensure it
+ * meets all the required rules. it performs parent reference validation, duplicate detection,
+ * and lexicographical order verification.
+ *
+ * it takes the parent node 'oParentNode' and the index of the child node within the parent's
+ * list 'childIndex'.
+ *
+ * the function returns TRUE if the child node passes all checks, or FALSE if any validation fails.
  */
 static boolean CheckerDT_validateChildNode(Node_T oParentNode, size_t childIndex) {
     Node_T oChildNode = NULL;
@@ -137,10 +155,14 @@ static boolean CheckerDT_validateChildNode(Node_T oParentNode, size_t childIndex
     return TRUE;
 }
 
-/* 
- * this function checks if the given node `oNNode` satisfies all required rules.
- * it ensures the node is not NULL and validates the parent-child path relationship.
- * the function returns TRUE if the node passes all validation checks, and FALSE otherwise.
+/*
+ * the function CheckerDT_Node_isValid checks if a given node 'oNNode' satisfies all the
+ * required rules. it ensures that the node is not null and validates the parent-child
+ * path relationship.
+ *
+ * it takes the node to be validated 'oNNode'.
+ *
+ * the function returns TRUE if the node passes all validation checks, or FALSE otherwise.
  */
 boolean CheckerDT_Node_isValid(Node_T oNNode) {
     Node_T oParentNode;
@@ -169,11 +191,14 @@ boolean CheckerDT_Node_isValid(Node_T oNNode) {
     return TRUE;
 }
 
-/* 
- * this function recursively traverses the tree starting at the node `oNNode`.
- * it returns FALSE immediately if it finds a violation.
- * increments `ulVerifiedNodeCount` for each valid node.
- * the function returns TRUE if all nodes in the subtree rooted at `oNNode` pass validation, and FALSE otherwise.
+/*
+ * the function CheckerDT_treeCheck recursively traverses the tree starting at 'oNNode'.
+ * it checks each node and its children for validity, and counts the number of nodes visited.
+ *
+ * it takes the starting node for the tree traversal 'oNNode'.
+ *
+ * the function returns TRUE if all nodes in the subtree rooted at 'oNNode' pass validation,
+ * or FALSE if any validation fails.
  */
 static boolean CheckerDT_treeCheck(Node_T oNNode) {
     size_t childIndex;
@@ -195,15 +220,17 @@ static boolean CheckerDT_treeCheck(Node_T oNNode) {
     return TRUE;
 }
 
-/* 
- * this function checks the overall validity of the File Tree (DT).
- * it ensures top-level invariants are met, performs a full recursive validation,
- * and checks that reported node count `ulCount` matches the actual count.
- * it takes the initialization status `bIsInitialized`, the root node `oNRoot`, and the reported node count `ulCount`.
- * the function returns TRUE if the tree passes all checks, and FALSE otherwise.
+/*
+ * the function CheckerDT_isValid checks the overall validity of the File Tree (DT).
+ * it ensures that top-level invariants are met, performs a full recursive validation
+ * of the tree structure, and checks that the reported node count matches the actual count.
+ *
+ * it takes a boolean 'bIsInitialized' indicating if the tree is initialized, the root node
+ * of the tree 'oNRoot', and the reported node count 'ulCount'.
+ *
+ * the function returns TRUE if the tree passes all checks, or FALSE if any validation fails.
  */
-boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot,
-                          size_t ulCount) {
+boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot, size_t ulCount) {
 
     ulVerifiedNodeCount = 0;
 
