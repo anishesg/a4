@@ -4,11 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "path.h"
-#include "ft.h"
 #include "node.h"
 #include "dynarray.h"
-
 
 /* a node in a ft */
 struct node {

@@ -1,11 +1,10 @@
 
-#ifndef NODE_INCLUDED
-#define NODE_INCLUDED
+#ifndef NODEFT_INCLUDED
+#define NODEFT_INCLUDED
 
 #include <stddef.h>
 #include "a4def.h"
 #include "path.h"
-
 
 /* A Node_T is a node in a File Tree */
 typedef struct node *Node_T;
@@ -30,7 +29,7 @@ int Node_new(Path_T oPPath, Node_T oNParent, boolean isDir,
 
 /*
   Destroys and frees all memory allocated for the subtree rooted at
-  oNNode, i.e., deletes this node and all its descendents. Returns the
+  oNNode, i.e., deletes this node and all its descendants. Returns the
   number of nodes deleted.
 */
 size_t Node_free(Node_T oNNode);
@@ -49,9 +48,9 @@ Path_T Node_getPath(Node_T oNNode);
   child _would_ have if inserted.
 */
 boolean Node_hasChild(Node_T oNParent, Path_T oPPath,
-                         size_t *pulChildID, boolean isDir);
+                      size_t *pulChildID, boolean isDir);
 
-/* Returns the number of children that oNParent has. */
+/* Returns the number of children that oNParent has if it is a directory. */
 size_t Node_getNumChildren(Node_T oNParent);
 
 /*
@@ -64,7 +63,7 @@ int Node_getChild(Node_T oNParent, size_t ulChildID,
                   Node_T *poNResult);
 
 /*
-  Returns a the parent node of oNNode.
+  Returns the parent node of oNNode.
   Returns NULL if oNNode is the root and thus has no parent.
 */
 Node_T Node_getParent(Node_T oNNode);
@@ -79,25 +78,32 @@ Node_T Node_getParent(Node_T oNNode);
 char *Node_toString(Node_T oNNode);
 
 /*
-  Returns the boolean determining if the oNNode is a directory or a file
+  Returns a boolean indicating if the oNNode is a directory (TRUE) or a file (FALSE).
 */
 boolean Node_isDirectory(Node_T oNNode);
 
 /*
-  Returns the contents of oNNode if the node is a file
+  Returns the contents of oNNode if the node is a file, or NULL if it's a directory.
 */
 void *Node_getContents(Node_T oNNode);
 
 /*
-  Replaces the contents of a file oNNode with pvContents and resets its
-  ulLength to ulNewLength
+  Replaces the contents of a file oNNode with pvNewContents and resets its
+  length to ulNewLength. Returns the old contents, or NULL on error.
 */
-void *Node_replaceContents(Node_T oNNode, void *pvContents,
-   size_t ulNewLength);
+void *Node_replaceContents(Node_T oNNode, void *pvNewContents,
+                           size_t ulNewLength);
 
 /*
-  Returns file content length of oNNode
+  Returns the content length of a file oNNode, or 0 if the node is a directory.
 */
 size_t Node_getContentLength(Node_T oNNode);
 
-#endif
+/*
+  Compares oNFirst and oNSecond lexicographically based on their paths
+  and type (directories vs. files). Returns <0, 0, or >0 if oNFirst is
+  "less than", "equal to", or "greater than" oNSecond, respectively.
+*/
+int Node_compare(Node_T oNFirst, Node_T oNSecond);
+
+#endif /* NODEFT_INCLUDED */
