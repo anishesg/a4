@@ -10,6 +10,9 @@
 #include "dynarray.h"
 #include "path.h"
 
+/* forward declarations */
+static boolean CheckerDT_treeCheck(Node_T oNNode);
+
 /* 
  * static variable to keep track of actual node count during traversal.
  * we use this to ensure that the reported node count aligns with 
@@ -148,7 +151,7 @@ static boolean validateChildNode(Node_T oParentNode, size_t childIndex) {
  * makes sure the node is not null and validates the parent-child 
  * path relationship.
  */
-static boolean CheckerDT_Node_isValid(Node_T oNNode) {
+boolean CheckerDT_Node_isValid(Node_T oNNode) {
     Node_T oParentNode;
     Path_T oCurrentPath;
     Path_T oParentPath;
