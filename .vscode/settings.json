@@ -2,6 +2,7 @@
     "files.associations": {
         "assert.h": "c",
         "stdio.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "dynarray.h": "c"
     }
 }

@@ -9,7 +9,6 @@
 #include "nodeFT.h"
 #include "path.h"
 #include "dynarray.h"
-#include "checkerDT.h"
 
 /*
  * A node in the File Tree (FT) represents either a file or a directory.
