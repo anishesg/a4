@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* ft.h                                                               */
-/* Author: [Your Name]                                                */
+/* Author: Christopher Moretti and Vikash Modi '23                    */
 /*--------------------------------------------------------------------*/
 
 #ifndef FT_INCLUDED
@@ -46,6 +46,7 @@ boolean FT_containsDir(const char *pcPath);
   * MEMORY_ERROR if memory could not be allocated to complete request
 */
 int FT_rmDir(const char *pcPath);
+
 
 /*
    Inserts a new file into the FT with absolute path pcPath, with
@@ -148,4 +149,4 @@ int FT_destroy(void);
 */
 char *FT_toString(void);
 
-#endif /* FT_INCLUDED */
+#endif
