@@ -1,561 +1,573 @@
 /*--------------------------------------------------------------------*/
 /* ft.c                                                               */
-/* Author: anish                                               */
+/* Author: anish                                             */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include "ft.h"
 #include "dynarray.h"
 #include "path.h"
 #include "a4def.h"
 
 /* Structure representing a node in the File Tree */
-typedef struct FTNode {
-    /* Absolute path of this node */
-    Path_T oPath;
+typedef struct FileTreeNode {
+    /* The path object corresponding to this node's absolute path */
+    Path_T oNodePath;
     /* Parent node, NULL if this is the root */
-    struct FTNode *psParent;
-    /* Dynamic array of children nodes */
+    struct FileTreeNode *psParentNode;
+    /* Dynamic array of child nodes */
     DynArray_T oChildren;
     /* TRUE if this node is a file, FALSE if it's a directory */
     boolean bIsFile;
     /* Contents of the file, NULL if not a file */
-    void *pvContents;
+    void *pvFileContents;
     /* Size of the file contents */
-    size_t ulSize;
-} FTNode_T;
+    size_t ulFileLength;
+} FileTreeNode_T;
 
-/* Static variables for the FT's state */
+/* Static variables for the File Tree's state */
 static boolean bIsInitialized = FALSE;
-static FTNode_T *psRoot = NULL;
-static size_t ulCount = 0;
+static FileTreeNode_T *psRootNode = NULL;
+static size_t ulTotalNodes = 0;
 
-/* Helper function to recursively free nodes */
-static size_t FTNode_free(FTNode_T *psNode) {
-    size_t ulFreed = 0;
-    size_t ulIndex;
+/* Helper function to free a node and its descendants */
+static size_t FT_freeNode(FileTreeNode_T *psNode) {
+    size_t ulFreedNodes = 0;
+    size_t ulChildIndex;
     size_t ulNumChildren;
 
-    if (psNode == NULL)
-        return ulFreed;
+    assert(psNode != NULL);
 
     ulNumChildren = DynArray_getLength(psNode->oChildren);
-    for (ulIndex = 0; ulIndex < ulNumChildren; ulIndex++) {
-        FTNode_T *psChild = DynArray_get(psNode->oChildren, ulIndex);
-        ulFreed += FTNode_free(psChild);
+    for (ulChildIndex = 0; ulChildIndex < ulNumChildren; ulChildIndex++) {
+        FileTreeNode_T *psChildNode = DynArray_get(psNode->oChildren, ulChildIndex);
+        ulFreedNodes += FT_freeNode(psChildNode);
     }
 
     DynArray_free(psNode->oChildren);
-    Path_free(psNode->oPath);
+    Path_free(psNode->oNodePath);
 
-    if (psNode->bIsFile && psNode->pvContents != NULL)
-        free(psNode->pvContents);
+    if (psNode->bIsFile && psNode->pvFileContents != NULL) {
+        free(psNode->pvFileContents);
+    }
 
     free(psNode);
-    ulFreed++;
+    ulFreedNodes++;
 
-    return ulFreed;
+    return ulFreedNodes;
 }
 
 /* Helper function to compare nodes for sorting */
-static int FTNode_compare(const void *pvFirst, const void *pvSecond) {
-    FTNode_T *psFirst = *(FTNode_T **)pvFirst;
-    FTNode_T *psSecond = *(FTNode_T **)pvSecond;
+static int FT_compareNodes(const void *pvNode1, const void *pvNode2) {
+    FileTreeNode_T *psNode1 = *(FileTreeNode_T **)pvNode1;
+    FileTreeNode_T *psNode2 = *(FileTreeNode_T **)pvNode2;
     int iTypeComparison;
 
     /* Files come before directories */
-    iTypeComparison = (int)psSecond->bIsFile - (int)psFirst->bIsFile;
-    if (iTypeComparison != 0)
+    iTypeComparison = (int)psNode2->bIsFile - (int)psNode1->bIsFile;
+    if (iTypeComparison != 0) {
         return iTypeComparison;
+    }
 
-    return Path_comparePath(psFirst->oPath, psSecond->oPath);
+    /* Lexicographical order */
+    return Path_comparePath(psNode1->oNodePath, psNode2->oNodePath);
 }
 
-/* Helper function to traverse the tree as far as possible towards oPath */
-static int FT_traversePath(Path_T oPath, FTNode_T **ppsResultNode) {
-    int iStatus;
-    Path_T oPrefix = NULL;
-    FTNode_T *psCurrent = NULL;
-    size_t ulDepth, ulIndex;
+/* Helper function to traverse the tree towards a path */
+static int FT_traversePath(Path_T oTargetPath, FileTreeNode_T **ppsFurthestNode) {
+    int iResult;
+    Path_T oCurrentPrefix = NULL;
+    FileTreeNode_T *psCurrentNode = NULL;
+    size_t ulDepth, ulLevel;
 
-    assert(oPath != NULL);
-    assert(ppsResultNode != NULL);
+    assert(oTargetPath != NULL);
+    assert(ppsFurthestNode != NULL);
 
-    if (psRoot == NULL) {
-        *ppsResultNode = NULL;
+    if (psRootNode == NULL) {
+        *ppsFurthestNode = NULL;
         return SUCCESS;
     }
 
-    iStatus = Path_prefix(oPath, 1, &oPrefix);
-    if (iStatus != SUCCESS) {
-        *ppsResultNode = NULL;
-        return iStatus;
+    iResult = Path_prefix(oTargetPath, 1, &oCurrentPrefix);
+    if (iResult != SUCCESS) {
+        *ppsFurthestNode = NULL;
+        return iResult;
     }
 
-    if (Path_comparePath(psRoot->oPath, oPrefix) != 0) {
-        Path_free(oPrefix);
-        *ppsResultNode = NULL;
+    if (Path_comparePath(psRootNode->oNodePath, oCurrentPrefix) != 0) {
+        Path_free(oCurrentPrefix);
+        *ppsFurthestNode = NULL;
         return CONFLICTING_PATH;
     }
-    Path_free(oPrefix);
+    Path_free(oCurrentPrefix);
 
-    psCurrent = psRoot;
-    ulDepth = Path_getDepth(oPath);
+    psCurrentNode = psRootNode;
+    ulDepth = Path_getDepth(oTargetPath);
 
-    for (ulIndex = 2; ulIndex <= ulDepth; ulIndex++) {
+    for (ulLevel = 2; ulLevel <= ulDepth; ulLevel++) {
         size_t ulChildIndex;
-        size_t ulNumChildren = DynArray_getLength(psCurrent->oChildren);
-        FTNode_T *psChild = NULL;
+        size_t ulNumChildren = DynArray_getLength(psCurrentNode->oChildren);
+        FileTreeNode_T *psChildNode = NULL;
         boolean bFound = FALSE;
 
-        iStatus = Path_prefix(oPath, ulIndex, &oPrefix);
-        if (iStatus != SUCCESS) {
-            *ppsResultNode = NULL;
-            return iStatus;
+        iResult = Path_prefix(oTargetPath, ulLevel, &oCurrentPrefix);
+        if (iResult != SUCCESS) {
+            *ppsFurthestNode = NULL;
+            return iResult;
         }
 
         for (ulChildIndex = 0; ulChildIndex < ulNumChildren; ulChildIndex++) {
-            psChild = DynArray_get(psCurrent->oChildren, ulChildIndex);
-            if (Path_comparePath(psChild->oPath, oPrefix) == 0) {
+            psChildNode = DynArray_get(psCurrentNode->oChildren, ulChildIndex);
+            if (Path_comparePath(psChildNode->oNodePath, oCurrentPrefix) == 0) {
                 bFound = TRUE;
                 break;
             }
         }
 
-        Path_free(oPrefix);
+        Path_free(oCurrentPrefix);
 
         if (bFound) {
-            psCurrent = psChild;
+            if (psChildNode->bIsFile && ulLevel != ulDepth) {
+                /* Intermediate path is a file, invalid */
+                *ppsFurthestNode = NULL;
+                return NOT_A_DIRECTORY;
+            }
+            psCurrentNode = psChildNode;
         } else {
             break;
         }
     }
 
-    *ppsResultNode = psCurrent;
+    *ppsFurthestNode = psCurrentNode;
     return SUCCESS;
 }
 
 /* Helper function to find a node given its path */
-static int FT_findNode(const char *pcPath, FTNode_T **ppsNode) {
-    int iStatus;
-    Path_T oPath = NULL;
-    FTNode_T *psNode = NULL;
+static int FT_findNode(const char *pcPath, FileTreeNode_T **ppsResultNode) {
+    int iResult;
+    Path_T oSearchPath = NULL;
+    FileTreeNode_T *psFoundNode = NULL;
 
     assert(pcPath != NULL);
-    assert(ppsNode != NULL);
+    assert(ppsResultNode != NULL);
 
     if (!bIsInitialized) {
-        *ppsNode = NULL;
+        *ppsResultNode = NULL;
         return INITIALIZATION_ERROR;
     }
 
-    iStatus = Path_new(pcPath, &oPath);
-    if (iStatus != SUCCESS) {
-        *ppsNode = NULL;
-        return iStatus;
+    iResult = Path_new(pcPath, &oSearchPath);
+    if (iResult != SUCCESS) {
+        *ppsResultNode = NULL;
+        return iResult;
     }
 
-    iStatus = FT_traversePath(oPath, &psNode);
-    if (iStatus != SUCCESS) {
-        Path_free(oPath);
-        *ppsNode = NULL;
-        return iStatus;
+    iResult = FT_traversePath(oSearchPath, &psFoundNode);
+    if (iResult != SUCCESS) {
+        Path_free(oSearchPath);
+        *ppsResultNode = NULL;
+        return iResult;
     }
 
-    if (psNode == NULL) {
-        Path_free(oPath);
-        *ppsNode = NULL;
+    if (psFoundNode == NULL) {
+        Path_free(oSearchPath);
+        *ppsResultNode = NULL;
         return NO_SUCH_PATH;
     }
 
-    if (Path_comparePath(psNode->oPath, oPath) != 0) {
-        Path_free(oPath);
-        *ppsNode = NULL;
+    if (Path_comparePath(psFoundNode->oNodePath, oSearchPath) != 0) {
+        Path_free(oSearchPath);
+        *ppsResultNode = NULL;
         return NO_SUCH_PATH;
     }
 
-    Path_free(oPath);
-    *ppsNode = psNode;
+    Path_free(oSearchPath);
+    *ppsResultNode = psFoundNode;
     return SUCCESS;
 }
 
 /* Initializes the File Tree */
 int FT_init(void) {
-    if (bIsInitialized)
+    if (bIsInitialized) {
         return INITIALIZATION_ERROR;
+    }
 
     bIsInitialized = TRUE;
-    psRoot = NULL;
-    ulCount = 0;
+    psRootNode = NULL;
+    ulTotalNodes = 0;
 
     return SUCCESS;
 }
 
 /* Destroys the File Tree */
 int FT_destroy(void) {
-    if (!bIsInitialized)
+    if (!bIsInitialized) {
         return INITIALIZATION_ERROR;
+    }
 
-    if (psRoot != NULL) {
-        ulCount -= FTNode_free(psRoot);
-        psRoot = NULL;
+    if (psRootNode != NULL) {
+        ulTotalNodes -= FT_freeNode(psRootNode);
+        psRootNode = NULL;
     }
 
     bIsInitialized = FALSE;
-
     return SUCCESS;
 }
 
-/* Inserts a directory into the File Tree */
+/* Inserts a new directory into the File Tree */
 int FT_insertDir(const char *pcPath) {
-    int iStatus;
-    Path_T oPath = NULL;
-    FTNode_T *psCurrent = NULL;
-    size_t ulDepth, ulIndex;
+    int iResult;
+    Path_T oInsertPath = NULL;
+    FileTreeNode_T *psCurrentNode = NULL;
+    size_t ulDepth, ulLevel;
 
     assert(pcPath != NULL);
 
-    if (!bIsInitialized)
+    if (!bIsInitialized) {
         return INITIALIZATION_ERROR;
-
-    iStatus = Path_new(pcPath, &oPath);
-    if (iStatus != SUCCESS)
-        return iStatus;
-
-    iStatus = FT_traversePath(oPath, &psCurrent);
-    if (iStatus != SUCCESS) {
-        Path_free(oPath);
-        return iStatus;
     }
 
-    if (psCurrent == NULL && psRoot != NULL) {
-        Path_free(oPath);
+    iResult = Path_new(pcPath, &oInsertPath);
+    if (iResult != SUCCESS) {
+        return iResult;
+    }
+
+    iResult = FT_traversePath(oInsertPath, &psCurrentNode);
+    if (iResult != SUCCESS) {
+        Path_free(oInsertPath);
+        return iResult;
+    }
+
+    if (psCurrentNode == NULL && psRootNode != NULL) {
+        Path_free(oInsertPath);
         return CONFLICTING_PATH;
     }
 
-    ulDepth = Path_getDepth(oPath);
-    ulIndex = psCurrent ? Path_getDepth(psCurrent->oPath) + 1 : 1;
+    ulDepth = Path_getDepth(oInsertPath);
+    ulLevel = psCurrentNode ? Path_getDepth(psCurrentNode->oNodePath) + 1 : 1;
 
     /* Check if directory already exists */
-    if (psCurrent && Path_comparePath(psCurrent->oPath, oPath) == 0) {
-        Path_free(oPath);
+    if (psCurrentNode && Path_comparePath(psCurrentNode->oNodePath, oInsertPath) == 0) {
+        Path_free(oInsertPath);
         return ALREADY_IN_TREE;
     }
 
-    while (ulIndex <= ulDepth) {
-        FTNode_T *psNewNode = malloc(sizeof(FTNode_T));
-        Path_T oPrefix = NULL;
+    while (ulLevel <= ulDepth) {
+        FileTreeNode_T *psNewNode = malloc(sizeof(FileTreeNode_T));
+        Path_T oPrefixPath = NULL;
 
         if (psNewNode == NULL) {
-            Path_free(oPath);
+            Path_free(oInsertPath);
             return MEMORY_ERROR;
         }
 
-        iStatus = Path_prefix(oPath, ulIndex, &oPrefix);
-        if (iStatus != SUCCESS) {
+        iResult = Path_prefix(oInsertPath, ulLevel, &oPrefixPath);
+        if (iResult != SUCCESS) {
             free(psNewNode);
-            Path_free(oPath);
-            return iStatus;
+            Path_free(oInsertPath);
+            return iResult;
         }
 
-        psNewNode->oPath = oPrefix;
-        psNewNode->psParent = psCurrent;
+        psNewNode->oNodePath = oPrefixPath;
+        psNewNode->psParentNode = psCurrentNode;
         psNewNode->oChildren = DynArray_new(0);
         if (psNewNode->oChildren == NULL) {
-            Path_free(oPrefix);
+            Path_free(oPrefixPath);
             free(psNewNode);
-            Path_free(oPath);
+            Path_free(oInsertPath);
             return MEMORY_ERROR;
         }
+
         psNewNode->bIsFile = FALSE;
-        psNewNode->pvContents = NULL;
-        psNewNode->ulSize = 0;
+        psNewNode->pvFileContents = NULL;
+        psNewNode->ulFileLength = 0;
 
-        if (psCurrent) {
-            DynArray_add(psCurrent->oChildren, psNewNode);
-            DynArray_sort(psCurrent->oChildren, FTNode_compare);
+        if (psCurrentNode) {
+            DynArray_add(psCurrentNode->oChildren, psNewNode);
+            DynArray_sort(psCurrentNode->oChildren, FT_compareNodes);
         } else {
-            psRoot = psNewNode;
+            psRootNode = psNewNode;
         }
 
-        psCurrent = psNewNode;
-        ulCount++;
-        ulIndex++;
+        psCurrentNode = psNewNode;
+        ulTotalNodes++;
+        ulLevel++;
     }
 
-    Path_free(oPath);
+    Path_free(oInsertPath);
     return SUCCESS;
 }
 
-/* Inserts a file into the File Tree */
-int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
-    int iStatus;
-    Path_T oPath = NULL;
-    FTNode_T *psCurrent = NULL;
-    size_t ulDepth, ulIndex;
-
-    assert(pcPath != NULL);
-    assert(pvContents != NULL);
-
-    if (!bIsInitialized)
-        return INITIALIZATION_ERROR;
-
-    iStatus = Path_new(pcPath, &oPath);
-    if (iStatus != SUCCESS)
-        return iStatus;
-
-    iStatus = FT_traversePath(oPath, &psCurrent);
-    if (iStatus != SUCCESS) {
-        Path_free(oPath);
-        return iStatus;
-    }
-
-    if (psCurrent == NULL && psRoot != NULL) {
-        Path_free(oPath);
-        return CONFLICTING_PATH;
-    }
-
-    if (Path_getDepth(oPath) == 1) {
-        Path_free(oPath);
-        return CONFLICTING_PATH;
-    }
-
-    ulDepth = Path_getDepth(oPath);
-    ulIndex = psCurrent ? Path_getDepth(psCurrent->oPath) + 1 : 1;
-
-    /* Check if file already exists */
-    if (psCurrent && Path_comparePath(psCurrent->oPath, oPath) == 0) {
-        Path_free(oPath);
-        return ALREADY_IN_TREE;
-    }
-
-    while (ulIndex <= ulDepth) {
-        FTNode_T *psNewNode = malloc(sizeof(FTNode_T));
-        Path_T oPrefix = NULL;
-
-        if (psNewNode == NULL) {
-            Path_free(oPath);
-            return MEMORY_ERROR;
-        }
-
-        iStatus = Path_prefix(oPath, ulIndex, &oPrefix);
-        if (iStatus != SUCCESS) {
-            free(psNewNode);
-            Path_free(oPath);
-            return iStatus;
-        }
-
-        psNewNode->oPath = oPrefix;
-        psNewNode->psParent = psCurrent;
-        psNewNode->oChildren = DynArray_new(0);
-        if (psNewNode->oChildren == NULL) {
-            Path_free(oPrefix);
-            free(psNewNode);
-            Path_free(oPath);
-            return MEMORY_ERROR;
-        }
-
-        if (ulIndex == ulDepth) {
-            /* This is the file node */
-            psNewNode->bIsFile = TRUE;
-            psNewNode->pvContents = malloc(ulLength);
-            if (psNewNode->pvContents == NULL) {
-                DynArray_free(psNewNode->oChildren);
-                Path_free(oPrefix);
-                free(psNewNode);
-                Path_free(oPath);
-                return MEMORY_ERROR;
-            }
-            memcpy(psNewNode->pvContents, pvContents, ulLength);
-            psNewNode->ulSize = ulLength;
-        } else {
-            /* Intermediate directories */
-            psNewNode->bIsFile = FALSE;
-            psNewNode->pvContents = NULL;
-            psNewNode->ulSize = 0;
-        }
-
-        if (psCurrent) {
-            DynArray_add(psCurrent->oChildren, psNewNode);
-            DynArray_sort(psCurrent->oChildren, FTNode_compare);
-        } else {
-            psRoot = psNewNode;
-        }
-
-        psCurrent = psNewNode;
-        ulCount++;
-        ulIndex++;
-    }
-
-    Path_free(oPath);
-    return SUCCESS;
-}
-
-/* Checks if a directory exists at the given path */
+/* Checks if the FT contains a directory with the given path */
 boolean FT_containsDir(const char *pcPath) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
 
     assert(pcPath != NULL);
 
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS || psNode == NULL)
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS || psNode == NULL) {
         return FALSE;
+    }
 
     return !psNode->bIsFile;
 }
 
-/* Checks if a file exists at the given path */
-boolean FT_containsFile(const char *pcPath) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
+/* Removes a directory from the File Tree */
+int FT_rmDir(const char *pcPath) {
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
 
     assert(pcPath != NULL);
 
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS || psNode == NULL)
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS) {
+        return iResult;
+    }
+
+    if (psNode->bIsFile) {
+        return NOT_A_DIRECTORY;
+    }
+
+    /* Remove node from parent's children */
+    if (psNode->psParentNode) {
+        DynArray_remove(psNode->psParentNode->oChildren, psNode);
+    } else {
+        psRootNode = NULL;
+    }
+
+    ulTotalNodes -= FT_freeNode(psNode);
+    return SUCCESS;
+}
+
+/* Inserts a new file into the File Tree */
+int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
+    int iResult;
+    Path_T oInsertPath = NULL;
+    FileTreeNode_T *psCurrentNode = NULL;
+    size_t ulDepth, ulLevel;
+
+    assert(pcPath != NULL);
+
+    if (!bIsInitialized) {
+        return INITIALIZATION_ERROR;
+    }
+
+    iResult = Path_new(pcPath, &oInsertPath);
+    if (iResult != SUCCESS) {
+        return iResult;
+    }
+
+    /* Cannot insert a file as the root of the tree */
+    if (Path_getDepth(oInsertPath) == 1) {
+        Path_free(oInsertPath);
+        return CONFLICTING_PATH;
+    }
+
+    iResult = FT_traversePath(oInsertPath, &psCurrentNode);
+    if (iResult != SUCCESS) {
+        Path_free(oInsertPath);
+        return iResult;
+    }
+
+    if (psCurrentNode == NULL && psRootNode != NULL) {
+        Path_free(oInsertPath);
+        return CONFLICTING_PATH;
+    }
+
+    ulDepth = Path_getDepth(oInsertPath);
+    ulLevel = psCurrentNode ? Path_getDepth(psCurrentNode->oNodePath) + 1 : 1;
+
+    /* Check if file already exists */
+    if (psCurrentNode && Path_comparePath(psCurrentNode->oNodePath, oInsertPath) == 0) {
+        Path_free(oInsertPath);
+        return ALREADY_IN_TREE;
+    }
+
+    while (ulLevel <= ulDepth) {
+        FileTreeNode_T *psNewNode = malloc(sizeof(FileTreeNode_T));
+        Path_T oPrefixPath = NULL;
+
+        if (psNewNode == NULL) {
+            Path_free(oInsertPath);
+            return MEMORY_ERROR;
+        }
+
+        iResult = Path_prefix(oInsertPath, ulLevel, &oPrefixPath);
+        if (iResult != SUCCESS) {
+            free(psNewNode);
+            Path_free(oInsertPath);
+            return iResult;
+        }
+
+        psNewNode->oNodePath = oPrefixPath;
+        psNewNode->psParentNode = psCurrentNode;
+        psNewNode->oChildren = DynArray_new(0);
+        if (psNewNode->oChildren == NULL) {
+            Path_free(oPrefixPath);
+            free(psNewNode);
+            Path_free(oInsertPath);
+            return MEMORY_ERROR;
+        }
+
+        if (ulLevel == ulDepth) {
+            /* Final node is the file */
+            psNewNode->bIsFile = TRUE;
+            psNewNode->pvFileContents = pvContents;
+            psNewNode->ulFileLength = ulLength;
+        } else {
+            /* Intermediate directories */
+            psNewNode->bIsFile = FALSE;
+            psNewNode->pvFileContents = NULL;
+            psNewNode->ulFileLength = 0;
+        }
+
+        if (psCurrentNode) {
+            DynArray_add(psCurrentNode->oChildren, psNewNode);
+            DynArray_sort(psCurrentNode->oChildren, FT_compareNodes);
+        } else {
+            psRootNode = psNewNode;
+        }
+
+        psCurrentNode = psNewNode;
+        ulTotalNodes++;
+        ulLevel++;
+    }
+
+    Path_free(oInsertPath);
+    return SUCCESS;
+}
+
+/* Checks if the FT contains a file with the given path */
+boolean FT_containsFile(const char *pcPath) {
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
+
+    assert(pcPath != NULL);
+
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS || psNode == NULL) {
         return FALSE;
+    }
 
     return psNode->bIsFile;
 }
 
-/* Removes a directory from the File Tree */
-int FT_rmDir(const char *pcPath) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
-
-    assert(pcPath != NULL);
-
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS)
-        return iStatus;
-
-    if (psNode->bIsFile)
-        return NOT_A_DIRECTORY;
-
-    /* Remove node from parent's children */
-    if (psNode->psParent) {
-        DynArray_remove(psNode->psParent->oChildren, psNode);
-    } else {
-        psRoot = NULL;
-    }
-
-    ulCount -= FTNode_free(psNode);
-    return SUCCESS;
-}
-
 /* Removes a file from the File Tree */
 int FT_rmFile(const char *pcPath) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
 
     assert(pcPath != NULL);
 
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS)
-        return iStatus;
-
-    if (!psNode->bIsFile)
-        return NOT_A_FILE;
-
-    /* Remove node from parent's children */
-    if (psNode->psParent) {
-        DynArray_remove(psNode->psParent->oChildren, psNode);
-    } else {
-        psRoot = NULL;
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS) {
+        return iResult;
     }
 
-    ulCount -= FTNode_free(psNode);
+    if (!psNode->bIsFile) {
+        return NOT_A_FILE;
+    }
+
+    /* Remove node from parent's children */
+    if (psNode->psParentNode) {
+        DynArray_remove(psNode->psParentNode->oChildren, psNode);
+    } else {
+        psRootNode = NULL;
+    }
+
+    ulTotalNodes -= FT_freeNode(psNode);
     return SUCCESS;
 }
 
 /* Retrieves the contents of a file */
 void *FT_getFileContents(const char *pcPath) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
 
     assert(pcPath != NULL);
 
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS || !psNode->bIsFile)
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS || !psNode->bIsFile) {
         return NULL;
+    }
 
-    return psNode->pvContents;
+    return psNode->pvFileContents;
 }
 
 /* Replaces the contents of a file */
-void *FT_replaceFileContents(const char *pcPath, void *pvNewContents,
-                             size_t ulNewLength) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
-    void *pvOldContents;
+void *FT_replaceFileContents(const char *pcPath, void *pvNewContents, size_t ulNewLength) {
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
+    void *pvOldContents = NULL;
 
     assert(pcPath != NULL);
-    assert(pvNewContents != NULL);
 
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS || !psNode->bIsFile)
-        return NULL;
-
-    pvOldContents = psNode->pvContents;
-    psNode->pvContents = malloc(ulNewLength);
-    if (psNode->pvContents == NULL) {
-        psNode->pvContents = pvOldContents;
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS || !psNode->bIsFile) {
         return NULL;
     }
-    memcpy(psNode->pvContents, pvNewContents, ulNewLength);
-    psNode->ulSize = ulNewLength;
 
-    if (pvOldContents != NULL)
-        free(pvOldContents);
+    pvOldContents = psNode->pvFileContents;
+    psNode->pvFileContents = pvNewContents;
+    psNode->ulFileLength = ulNewLength;
 
     return pvOldContents;
 }
 
 /* Retrieves information about a node */
 int FT_stat(const char *pcPath, boolean *pbIsFile, size_t *pulSize) {
-    int iStatus;
-    FTNode_T *psNode = NULL;
+    int iResult;
+    FileTreeNode_T *psNode = NULL;
 
     assert(pcPath != NULL);
     assert(pbIsFile != NULL);
     assert(pulSize != NULL);
 
-    iStatus = FT_findNode(pcPath, &psNode);
-    if (iStatus != SUCCESS)
-        return iStatus;
+    iResult = FT_findNode(pcPath, &psNode);
+    if (iResult != SUCCESS) {
+        return iResult;
+    }
 
-    *pbIsFile = psNode->bIsFile;
-    *pulSize = psNode->bIsFile ? psNode->ulSize : 0;
+    if (psNode->bIsFile) {
+        *pbIsFile = TRUE;
+        *pulSize = psNode->ulFileLength;
+    } else {
+        *pbIsFile = FALSE;
+        /* Do not change *pulSize */
+    }
 
     return SUCCESS;
 }
 
 /* Helper function for pre-order traversal */
-static void FT_preOrderTraversal(FTNode_T *psNode, DynArray_T oNodes) {
-    size_t ulIndex;
+static void FT_preOrderTraversal(FileTreeNode_T *psNode, DynArray_T oNodes) {
+    size_t ulChildIndex;
     size_t ulNumChildren;
 
-    if (psNode == NULL)
+    if (psNode == NULL) {
         return;
+    }
 
     DynArray_add(oNodes, psNode);
     ulNumChildren = DynArray_getLength(psNode->oChildren);
 
     /* Files before directories */
-    for (ulIndex = 0; ulIndex < ulNumChildren; ulIndex++) {
-        FTNode_T *psChild = DynArray_get(psNode->oChildren, ulIndex);
-        if (psChild->bIsFile)
-            FT_preOrderTraversal(psChild, oNodes);
+    for (ulChildIndex = 0; ulChildIndex < ulNumChildren; ulChildIndex++) {
+        FileTreeNode_T *psChildNode = DynArray_get(psNode->oChildren, ulChildIndex);
+        if (psChildNode->bIsFile) {
+            FT_preOrderTraversal(psChildNode, oNodes);
+        }
     }
 
-    for (ulIndex = 0; ulIndex < ulNumChildren; ulIndex++) {
-        FTNode_T *psChild = DynArray_get(psNode->oChildren, ulIndex);
-        if (!psChild->bIsFile)
-            FT_preOrderTraversal(psChild, oNodes);
+    for (ulChildIndex = 0; ulChildIndex < ulNumChildren; ulChildIndex++) {
+        FileTreeNode_T *psChildNode = DynArray_get(psNode->oChildren, ulChildIndex);
+        if (!psChildNode->bIsFile) {
+            FT_preOrderTraversal(psChildNode, oNodes);
+        }
     }
 }
 
@@ -566,19 +578,21 @@ char *FT_toString(void) {
     char *pcResult = NULL;
     size_t ulIndex;
 
-    if (!bIsInitialized)
+    if (!bIsInitialized) {
         return NULL;
+    }
 
     oNodes = DynArray_new(0);
-    if (oNodes == NULL)
+    if (oNodes == NULL) {
         return NULL;
+    }
 
-    FT_preOrderTraversal(psRoot, oNodes);
+    FT_preOrderTraversal(psRootNode, oNodes);
 
     /* Calculate total length */
     for (ulIndex = 0; ulIndex < DynArray_getLength(oNodes); ulIndex++) {
-        FTNode_T *psNode = DynArray_get(oNodes, ulIndex);
-        ulTotalLength += Path_getStrLength(psNode->oPath) + 1; /* For newline */
+        FileTreeNode_T *psNode = DynArray_get(oNodes, ulIndex);
+        ulTotalLength += Path_getStrLength(psNode->oNodePath) + 1; /* For newline */
     }
 
     pcResult = malloc(ulTotalLength);
@@ -590,8 +604,8 @@ char *FT_toString(void) {
 
     /* Concatenate paths */
     for (ulIndex = 0; ulIndex < DynArray_getLength(oNodes); ulIndex++) {
-        FTNode_T *psNode = DynArray_get(oNodes, ulIndex);
-        strcat(pcResult, Path_getPathname(psNode->oPath));
+        FileTreeNode_T *psNode = DynArray_get(oNodes, ulIndex);
+        strcat(pcResult, Path_getPathname(psNode->oNodePath));
         strcat(pcResult, "\n");
     }
 
