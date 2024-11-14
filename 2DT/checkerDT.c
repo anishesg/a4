@@ -10,7 +10,7 @@
 #include "dynarray.h"
 #include "path.h"
 
-/* forward declarations */
+/* forward declarations, using node oNNode; returns: boolean for tree check*/
 static boolean CheckerDT_treeCheck(Node_T oNNode);
 
 /*
