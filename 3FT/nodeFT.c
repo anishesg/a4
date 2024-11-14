@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "node.h"
+#include "nodeFT.h"
 #include "dynarray.h"
 
 /* a node in a ft */
