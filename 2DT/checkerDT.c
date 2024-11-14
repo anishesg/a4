@@ -25,10 +25,13 @@ static size_t ulVerifiedNodeCount = 0;
  * parent pointer correctly references the expected parent node. this ensures that
  * each child node points back to the correct parent.
  *
- * it takes the expected parent node 'oParentNode', the child node 'oChildNode',
- * and the index of the child within its parent's list 'childIndex'.
+ * parameters:
+ *   - oParentNode: the expected parent node.
+ *   - oChildNode: the child node being checked.
+ *   - childIndex: the index of the child within its parent's list.
  *
- * the function returns TRUE if the parent reference is correct, or FALSE otherwise.
+ * returns:
+ *   - TRUE if the parent reference is correct, or FALSE otherwise.
  */
 static boolean CheckerDT_validateChildParentReference(Node_T oParentNode, Node_T oChildNode, size_t childIndex) {
     Node_T oActualParent = Node_getParent(oChildNode);
@@ -48,10 +51,13 @@ static boolean CheckerDT_validateChildParentReference(Node_T oParentNode, Node_T
  * comparing the current child with all previously processed child nodes under the same parent.
  * this ensures that there aren't two nodes with the same name under the same parent node.
  *
- * it takes the parent node 'oParentNode', the child node 'oChildNode', and the index of the
- * current child within the parent's list 'currentIndex'.
+ * parameters:
+ *   - oParentNode: the parent node containing the child nodes.
+ *   - oChildNode: the child node being checked.
+ *   - currentIndex: the index of the current child within the parent's list.
  *
- * the function returns TRUE if there are no duplicates found, or FALSE if a duplicate is detected.
+ * returns:
+ *   - TRUE if there are no duplicates found, or FALSE if a duplicate is detected.
  */
 static boolean CheckerDT_checkForDuplicateChildren(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
     size_t compareIdx;
@@ -83,11 +89,14 @@ static boolean CheckerDT_checkForDuplicateChildren(Node_T oParentNode, Node_T oC
  * in lexicographical order within their parent's list. it checks if each child node is
  * in the correct position relative to its neighboring nodes.
  *
- * it takes the parent node 'oParentNode', the child node 'oChildNode', and the index of the
- * current child within the parent's list 'currentIndex'.
+ * parameters:
+ *   - oParentNode: the parent node containing the child nodes.
+ *   - oChildNode: the child node being checked.
+ *   - currentIndex: the index of the current child within the parent's list.
  *
- * the function returns TRUE if the child nodes are in the correct lexicographical order,
- * or FALSE if an ordering violation is detected.
+ * returns:
+ *   - TRUE if the child nodes are in the correct lexicographical order,
+ *     or FALSE if an ordering violation is detected.
  */
 static boolean CheckerDT_verifyLexicographicalOrder(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
     if (currentIndex > 0) {
@@ -119,10 +128,12 @@ static boolean CheckerDT_verifyLexicographicalOrder(Node_T oParentNode, Node_T o
  * meets all the required rules. it performs parent reference validation, duplicate detection,
  * and lexicographical order verification.
  *
- * it takes the parent node 'oParentNode' and the index of the child node within the parent's
- * list 'childIndex'.
+ * parameters:
+ *   - oParentNode: the parent node of the child.
+ *   - childIndex: the index of the child node within the parent's list.
  *
- * the function returns TRUE if the child node passes all checks, or FALSE if any validation fails.
+ * returns:
+ *   - TRUE if the child node passes all checks, or FALSE if any validation fails.
  */
 static boolean CheckerDT_validateChildNode(Node_T oParentNode, size_t childIndex) {
     Node_T oChildNode = NULL;
@@ -157,12 +168,14 @@ static boolean CheckerDT_validateChildNode(Node_T oParentNode, size_t childIndex
 
 /*
  * the function CheckerDT_Node_isValid checks if a given node 'oNNode' satisfies all the
- * required rules. it ensures that the node is not null and validates the parent-child
+ * required rules. it ensures that 'oNNode' is not null and validates the parent-child
  * path relationship.
  *
- * it takes the node to be validated 'oNNode'.
+ * parameters:
+ *   - oNNode: the node being validated.
  *
- * the function returns TRUE if the node passes all validation checks, or FALSE otherwise.
+ * returns:
+ *   - TRUE if 'oNNode' passes all validation checks, or FALSE otherwise.
  */
 boolean CheckerDT_Node_isValid(Node_T oNNode) {
     Node_T oParentNode;
@@ -195,10 +208,12 @@ boolean CheckerDT_Node_isValid(Node_T oNNode) {
  * the function CheckerDT_treeCheck recursively traverses the tree starting at 'oNNode'.
  * it checks each node and its children for validity, and counts the number of nodes visited.
  *
- * it takes the starting node for the tree traversal 'oNNode'.
+ * parameters:
+ *   - oNNode: the starting node for the tree traversal.
  *
- * the function returns TRUE if all nodes in the subtree rooted at 'oNNode' pass validation,
- * or FALSE if any validation fails.
+ * returns:
+ *   - TRUE if all nodes in the subtree rooted at 'oNNode' pass validation,
+ *     or FALSE if any validation fails.
  */
 static boolean CheckerDT_treeCheck(Node_T oNNode) {
     size_t childIndex;
@@ -225,10 +240,13 @@ static boolean CheckerDT_treeCheck(Node_T oNNode) {
  * it ensures that top-level invariants are met, performs a full recursive validation
  * of the tree structure, and checks that the reported node count matches the actual count.
  *
- * it takes a boolean 'bIsInitialized' indicating if the tree is initialized, the root node
- * of the tree 'oNRoot', and the reported node count 'ulCount'.
+ * parameters:
+ *   - bIsInitialized: boolean indicating if the tree is initialized.
+ *   - oNRoot: the root node of the tree.
+ *   - ulCount: the reported node count.
  *
- * the function returns TRUE if the tree passes all checks, or FALSE if any validation fails.
+ * returns:
+ *   - TRUE if the tree passes all checks, or FALSE if any validation fails.
  */
 boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot, size_t ulCount) {
 
