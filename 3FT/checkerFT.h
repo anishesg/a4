@@ -1,30 +1,31 @@
-/* Functions used in checkerFT.c and their corresponding
-parameters they take in.*/
+/*--------------------------------------------------------------------*/
+/* checkerFT.h                                                        */
+/* Author: anish                                                      */
+/*--------------------------------------------------------------------*/
 
-#ifndef CHECKER_INCLUDED
-#define CHECKER_INCLUDED
+#ifndef CHECKERFT_INCLUDED
+#define CHECKERFT_INCLUDED
 
 #include "nodeFT.h"
 
+/*
+    Validates a single node in the File Tree.
+    Returns TRUE if the node `node` is in a valid state, FALSE otherwise.
+    If invalid, an error message is printed to stderr.
+*/
+boolean CheckerFT_Node_isValid(Node_T node);
 
 /*
-   Returns TRUE if oNNode represents a directory/file entry
-   in a valid state, or FALSE otherwise.
+    Validates the entire File Tree hierarchy.
+    Returns TRUE if the File Tree is valid, FALSE otherwise.
+    If invalid, an error message is printed to stderr.
+    The validation checks are based on:
+    - `isInitialized`: whether the File Tree has been initialized
+    - `root`: the root node of the hierarchy
+    - `count`: the total number of nodes in the hierarchy
 */
-boolean CheckerFT_Node_isValid(Node_T oNNode);
-
-/*
-   Returns TRUE if the hierarchy is in a valid state or FALSE
-   otherwise.  The data structure's validity is based on a boolean
-   bIsInitialized indicating whether the FT is in an 
-   initialized state, a Node_T oNRoot representing the root of the 
-   hierarchy, and a size_t ulCount representing the total number of 
-   directories in the hierarchy.
-*/
-boolean CheckerFT_isValid(boolean bIsInitialized,
-                          Node_T oNRoot,
-                          size_t ulCount);
-
-
+boolean CheckerFT_isValid(boolean isInitialized,
+                          Node_T root,
+                          size_t count);
 
 #endif
