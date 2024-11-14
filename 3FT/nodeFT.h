@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* nodeFT.h                                                           */
-/* Author: [Your Name]                                                */
+/* Author: Mirabelle Weinbach and John Wallace                        */
 /*--------------------------------------------------------------------*/
 
 #ifndef NODEFT_INCLUDED
@@ -9,79 +9,91 @@
 #include <stddef.h>
 #include "a4def.h"
 #include "path.h"
-#include "dynarray.h"
 
-/* Enumeration for node types */
-typedef enum { IS_FILE, IS_DIRECTORY } nodeType;
+/* Enum to specify the type of node, either directory or file */
+typedef enum {
+    IS_DIRECTORY,
+    IS_FILE
+} nodeType;
 
-/* A Node_T is a node in the File Tree */
+/* A Node_T is a node in a File Tree, which can be either a file or a directory */
 typedef struct node *Node_T;
 
 /*
-  Creates a new node in the File Tree with path oPPath, type 'type',
-  and parent oNParent. Returns SUCCESS if the new node is created
-  successfully and sets *poNResult to the new node.
-  Otherwise, sets *poNResult to NULL and returns:
-  * MEMORY_ERROR if memory could not be allocated
-  * CONFLICTING_PATH if oNParent's path is not an ancestor of oPPath
-  * NO_SUCH_PATH if oPPath is of depth 0
-                 or oNParent's path is not oPPath's direct parent
-                 or oNParent is NULL but oPPath is not of depth 1
-  * ALREADY_IN_TREE if oNParent already has a child with this path
+  Creates a new node in the File Tree with a specified type (file or directory),
+  at the given path oPPath, and a parent node oNParent. On success, sets
+  *poNResult to the new node and returns SUCCESS. Otherwise, sets *poNResult
+  to NULL and returns:
+  * MEMORY_ERROR if memory allocation fails,
+  * CONFLICTING_PATH if oNParent's path is not an ancestor of oPPath,
+  * NO_SUCH_PATH if oPPath is of invalid depth or hierarchy,
+  * ALREADY_IN_TREE if oNParent already has a child with oPPath.
 */
-int Node_new(Path_T oPPath, nodeType type, Node_T oNParent, Node_T *poNResult);
+int Node_new(Path_T oPPath, nodeType type, Node_T oNParent,
+             Node_T *poNResult);
 
 /*
-  Destroys and frees all memory allocated for the subtree rooted at
-  oNNode, i.e., deletes this node and all its descendants. Returns the
-  number of nodes deleted.
+  Frees all memory for the subtree rooted at oNNode (including oNNode itself).
+  Returns the count of nodes freed.
 */
 size_t Node_free(Node_T oNNode);
 
-/* Returns the path object representing oNNode's absolute path. */
+/* Retrieves the path object representing oNNode's full path. */
 Path_T Node_getPath(Node_T oNNode);
 
-/* Returns the type of oNNode, either IS_FILE or IS_DIRECTORY */
-nodeType Node_getType(Node_T oNNode);
-
 /*
-  Sets the contents of a file node.
-  Returns SUCCESS if successful, or NOT_A_FILE if the node is not a file.
+  Checks if oNParent has a child with path oPPath. If found, sets
+  *pulChildID to the identifier of this child (as used in Node_getChild)
+  and returns TRUE. If not, sets *pulChildID to where it would be inserted
+  and returns FALSE.
 */
-int Node_insertFileContents(Node_T oNNode, void *pvContents, size_t ulLength);
-
-/* Returns the contents of a file node, or NULL if not a file */
-void *Node_getContents(Node_T oNNode);
-
-/* Returns the size of the contents of a file node */
-size_t Node_getSize(Node_T oNNode);
+boolean Node_hasChild(Node_T oNParent, Path_T oPPath,
+                      size_t *pulChildID);
 
 /*
-  Returns SUCCESS and sets *pulNum to the number of children
-  of oNParent if oNParent is a directory.
-  Returns NOT_A_DIRECTORY if oNParent is not a directory.
+  Sets *pulNum to the count of children of oNParent if it is a directory.
+  If oNParent is not a directory, returns NOT_A_DIRECTORY.
 */
 int Node_getNumChildren(Node_T oNParent, size_t *pulNum);
 
 /*
-  Returns SUCCESS and sets *poNResult to be the child node
-  of oNParent with identifier ulChildID, if one exists.
-  Otherwise, sets *poNResult to NULL and returns status:
-  * NO_SUCH_PATH if ulChildID is not a valid child for oNParent
+  Retrieves the child node of oNParent at the specified ulChildID.
+  If successful, sets *poNResult to this child and returns SUCCESS.
+  If ulChildID is invalid, sets *poNResult to NULL and returns NO_SUCH_PATH.
 */
-int Node_getChild(Node_T oNParent, size_t ulChildID, Node_T *poNResult);
+int Node_getChild(Node_T oNParent, size_t ulChildID,
+                  Node_T *poNResult);
 
-/*
-  Returns TRUE if oNParent has a child with path oPPath.
-  If found, stores in *pulChildID the child's identifier.
-  Returns FALSE if it does not.
-*/
-boolean Node_hasChild(Node_T oNParent, Path_T oPPath, size_t *pulChildID);
-
-/*
-  Returns the parent node of oNNode.
-  Returns NULL if oNNode is the root and thus has no parent.
-*/
+/* Returns the parent node of oNNode, or NULL if oNNode is the root node. */
 Node_T Node_getParent(Node_T oNNode);
 
-#endif /* NODEFT_INCLUDED */
+/*
+  Compares two nodes, oNFirst and oNSecond, based on their paths
+  lexicographically. Returns:
+  * <0 if oNFirst is less than oNSecond,
+  * 0 if they are equal,
+  * >0 if oNFirst is greater than oNSecond.
+*/
+int Node_compare(Node_T oNFirst, Node_T oNSecond);
+
+/*
+  Provides a dynamically-allocated string representation of oNNode's path.
+  Caller is responsible for freeing the returned string.
+  Returns NULL if allocation fails.
+*/
+char *Node_toString(Node_T oNNode);
+
+/* Returns the type of oNNode (IS_FILE or IS_DIRECTORY). */
+nodeType Node_getType(Node_T oNNode);
+
+/*
+  Sets the data contents for oNNode if it is a file node. If oNNode is a file,
+  assigns pvContents (of length ulLength) to it and returns SUCCESS.
+  If oNNode is a directory, returns BAD_PATH.
+*/
+int Node_insertFileContents(Node_T oNNode, void *pvContents, size_t ulLength);
+
+/* Returns a pointer to the contents of a file node, or NULL if not a file. */
+void *Node_getContents(Node_T oNNode);
+
+/* Returns the size of the contents of a file node in bytes, or 0
