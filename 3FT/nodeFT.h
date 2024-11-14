@@ -96,4 +96,7 @@ int Node_insertFileContents(Node_T oNNode, void *pvContents, size_t ulLength);
 /* Returns a pointer to the contents of a file node, or NULL if not a file. */
 void *Node_getContents(Node_T oNNode);
 
-/* Returns the size of the contents of a file node in bytes, or 0
+/* Returns the size of the contents of a file node in bytes, or 0 if not a file. */
+size_t Node_getSize(Node_T oNNode);
+
+#endif /* NODEFT_INCLUDED */
