@@ -334,7 +334,17 @@ int FT_rmDir(const char *pcPath) {
 
     /* Remove node from parent's children */
     if (psNode->psParentNode) {
-        DynArray_remove(psNode->psParentNode->oChildren, psNode);
+        size_t ulChildIndex;
+        boolean bFound = FALSE;
+        /* Find the index of psNode in parent's children */
+        for (ulChildIndex = 0; ulChildIndex < DynArray_getLength(psNode->psParentNode->oChildren); ulChildIndex++) {
+            if (DynArray_get(psNode->psParentNode->oChildren, ulChildIndex) == psNode) {
+                DynArray_removeAt(psNode->psParentNode->oChildren, ulChildIndex);
+                bFound = TRUE;
+                break;
+            }
+        }
+        assert(bFound); /* psNode should be found in parent's children */
     } else {
         psRootNode = NULL;
     }
@@ -474,7 +484,17 @@ int FT_rmFile(const char *pcPath) {
 
     /* Remove node from parent's children */
     if (psNode->psParentNode) {
-        DynArray_remove(psNode->psParentNode->oChildren, psNode);
+        size_t ulChildIndex;
+        boolean bFound = FALSE;
+        /* Find the index of psNode in parent's children */
+        for (ulChildIndex = 0; ulChildIndex < DynArray_getLength(psNode->psParentNode->oChildren); ulChildIndex++) {
+            if (DynArray_get(psNode->psParentNode->oChildren, ulChildIndex) == psNode) {
+                DynArray_removeAt(psNode->psParentNode->oChildren, ulChildIndex);
+                bFound = TRUE;
+                break;
+            }
+        }
+        assert(bFound); /* psNode should be found in parent's children */
     } else {
         psRootNode = NULL;
     }
@@ -482,6 +502,7 @@ int FT_rmFile(const char *pcPath) {
     ulTotalNodes -= FT_freeNode(psNode);
     return SUCCESS;
 }
+
 
 /* Retrieves the contents of a file */
 void *FT_getFileContents(const char *pcPath) {
