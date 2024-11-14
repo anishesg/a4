@@ -421,9 +421,7 @@ int FT_rmDir(const char *pcPath){
 }
 
 /* ------------------------------------------------------------------ */
-
-int FT_insertFile(const char *pcPath, void *pvContents,
-    size_t ulLength){
+int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
     int iStatus;
     Path_T oPPath = NULL;
     Node_T oNFirstNew = NULL;
@@ -432,7 +430,6 @@ int FT_insertFile(const char *pcPath, void *pvContents,
     size_t ulNewNodes = 0;
 
     assert(pcPath != NULL);
-    assert (pvContents != NULL);
   
     /* validate pcPath and generate a Path_T for it */
     if(!bIsInitialized)
@@ -444,8 +441,7 @@ int FT_insertFile(const char *pcPath, void *pvContents,
 
     /* find the closest ancestor of oPPath already in the tree */
     iStatus = FT_traversePath(oPPath, &oNCurr);
-    if(iStatus != SUCCESS)
-    {
+    if(iStatus != SUCCESS) {
         Path_free(oPPath);
         return iStatus;
     }
@@ -502,11 +498,25 @@ int FT_insertFile(const char *pcPath, void *pvContents,
             return iStatus;
         }
 
-        /* check if file, insert contents if yes */
-        if (Node_getType(oNNewNode) == IS_FILE){
-            iStatus = Node_insertFileContents(oNNewNode, 
-            pvContents, ulLength);
-            if (iStatus !=SUCCESS){
+        /* Handle file contents: assign empty content if NULL */
+        if (Node_getType(oNNewNode) == IS_FILE) {
+            if (pvContents == NULL) {
+                /* Treat NULL content as an empty file */
+                pvContents = malloc(1);  // Allocate a single byte
+                if (pvContents == NULL) {
+                    Path_free(oPPath);
+                    Path_free(oPPrefix);
+                    if(oNFirstNew != NULL)
+                        (void) Node_free(oNFirstNew);
+                    return MEMORY_ERROR;
+                }
+                *(char *)pvContents = '\0';  // Set to empty
+                ulLength = 0;
+            }
+
+            /* Insert the file contents */
+            iStatus = Node_insertFileContents(oNNewNode, pvContents, ulLength);
+            if (iStatus != SUCCESS) {
                 Path_free(oPPath);
                 Path_free(oPPrefix);
                 if(oNFirstNew != NULL)
@@ -532,7 +542,6 @@ int FT_insertFile(const char *pcPath, void *pvContents,
     
     return SUCCESS;
 }
-
 /* ------------------------------------------------------------------ */
 
 boolean FT_containsFile(const char *pcPath){
