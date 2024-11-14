@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* ft.c                                                               */
-/* Author: anish                                              */
+/* Author: [Your Name]                                                */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
@@ -10,7 +10,7 @@
 #include "path.h"
 #include "dynarray.h"
 #include "a4def.h"
-#include "nodeFT.h" 
+#include "nodeFT.h"   /* Include nodeFT.h to get declarations of Node_* functions */
 
 /* state variables for the file tree */
 static boolean isInitialized = FALSE;
@@ -39,6 +39,12 @@ static int FT_traversePath(Path_T path, Node_T *node) {
         return status;
     }
 
+    if (Node_getPath(root) == NULL || prefix == NULL) {
+        Path_free(prefix);
+        *node = NULL;
+        return NO_SUCH_PATH;
+    }
+
     if (Path_comparePath(Node_getPath(root), prefix) != 0) {
         Path_free(prefix);
         *node = NULL;
@@ -55,9 +61,9 @@ static int FT_traversePath(Path_T path, Node_T *node) {
         Node_T childNode = NULL;
 
         status = Path_prefix(path, level, &prefix);
-        if (status != SUCCESS) {
+        if (status != SUCCESS || prefix == NULL) {
             *node = NULL;
-            return status;
+            return status == SUCCESS ? MEMORY_ERROR : status;
         }
 
         hasChild = Node_hasChild(currentNode, prefix, &childIndex);
@@ -65,9 +71,9 @@ static int FT_traversePath(Path_T path, Node_T *node) {
 
         if (hasChild) {
             status = Node_getChild(currentNode, childIndex, &childNode);
-            if (status != SUCCESS) {
+            if (status != SUCCESS || childNode == NULL) {
                 *node = NULL;
-                return status;
+                return status == SUCCESS ? NO_SUCH_PATH : status;
             }
             if (Node_getType(childNode) == IS_FILE && level != depth) {
                 *node = NULL;
@@ -98,25 +104,19 @@ static int FT_findNode(const char *pathStr, Node_T *node) {
     }
 
     status = Path_new(pathStr, &path);
-    if (status != SUCCESS) {
+    if (status != SUCCESS || path == NULL) {
         *node = NULL;
-        return status;
+        return status == SUCCESS ? BAD_PATH : status;
     }
 
     status = FT_traversePath(path, &foundNode);
-    if (status != SUCCESS) {
+    if (status != SUCCESS || foundNode == NULL) {
         Path_free(path);
         *node = NULL;
-        return status;
+        return status == SUCCESS ? NO_SUCH_PATH : status;
     }
 
-    if (foundNode == NULL) {
-        Path_free(path);
-        *node = NULL;
-        return NO_SUCH_PATH;
-    }
-
-    if (Path_comparePath(Node_getPath(foundNode), path) != 0) {
+    if (Node_getPath(foundNode) == NULL || Path_comparePath(Node_getPath(foundNode), path) != 0) {
         Path_free(path);
         *node = NULL;
         return NO_SUCH_PATH;
@@ -143,8 +143,8 @@ int FT_insertDir(const char *pcPath) {
     }
 
     status = Path_new(pcPath, &path);
-    if (status != SUCCESS) {
-        return status;
+    if (status != SUCCESS || path == NULL) {
+        return status == SUCCESS ? BAD_PATH : status;
     }
 
     status = FT_traversePath(path, &currentNode);
@@ -174,22 +174,22 @@ int FT_insertDir(const char *pcPath) {
         Node_T newNode = NULL;
 
         status = Path_prefix(path, level, &prefix);
-        if (status != SUCCESS) {
+        if (status != SUCCESS || prefix == NULL) {
             Path_free(path);
             if (firstNewNode != NULL) {
                 Node_free(firstNewNode);
             }
-            return status;
+            return status == SUCCESS ? MEMORY_ERROR : status;
         }
 
         status = Node_new(prefix, IS_DIRECTORY, currentNode, &newNode);
         Path_free(prefix);
-        if (status != SUCCESS) {
+        if (status != SUCCESS || newNode == NULL || Node_getPath(newNode) == NULL) {
             Path_free(path);
             if (firstNewNode != NULL) {
                 Node_free(firstNewNode);
             }
-            return status;
+            return status == SUCCESS ? MEMORY_ERROR : status;
         }
 
         if (firstNewNode == NULL) {
@@ -202,6 +202,10 @@ int FT_insertDir(const char *pcPath) {
     }
 
     if (root == NULL) {
+        if (firstNewNode == NULL || Node_getPath(firstNewNode) == NULL) {
+            Path_free(path);
+            return MEMORY_ERROR;
+        }
         root = firstNewNode;
     }
 
@@ -222,7 +226,7 @@ boolean FT_containsDir(const char *pcPath) {
     }
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS || Node_getType(node) != IS_DIRECTORY) {
+    if (status != SUCCESS || node == NULL || Node_getType(node) != IS_DIRECTORY) {
         return FALSE;
     }
 
@@ -237,8 +241,8 @@ int FT_rmDir(const char *pcPath) {
     assert(pcPath != NULL);
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS) {
-        return status;
+    if (status != SUCCESS || node == NULL) {
+        return status == SUCCESS ? NO_SUCH_PATH : status;
     }
 
     if (Node_getType(node) != IS_DIRECTORY) {
@@ -269,8 +273,8 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
     }
 
     status = Path_new(pcPath, &path);
-    if (status != SUCCESS) {
-        return status;
+    if (status != SUCCESS || path == NULL) {
+        return status == SUCCESS ? BAD_PATH : status;
     }
 
     if (Path_getDepth(path) == 1) {
@@ -279,26 +283,17 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
     }
 
     status = FT_traversePath(path, &currentNode);
-    if (status != SUCCESS) {
+    if (status != SUCCESS || currentNode == NULL) {
         Path_free(path);
-        return status;
-    }
-
-    if (currentNode == NULL && root != NULL) {
-        Path_free(path);
-        return CONFLICTING_PATH;
+        return status == SUCCESS ? CONFLICTING_PATH : status;
     }
 
     depth = Path_getDepth(path);
-    if (currentNode == NULL) {
+    level = Path_getDepth(Node_getPath(currentNode)) + 1;
+
+    if (Path_comparePath(Node_getPath(currentNode), path) == 0) {
         Path_free(path);
-        return CONFLICTING_PATH;
-    } else {
-        level = Path_getDepth(Node_getPath(currentNode)) + 1;
-        if (Path_comparePath(Node_getPath(currentNode), path) == 0) {
-            Path_free(path);
-            return ALREADY_IN_TREE;
-        }
+        return ALREADY_IN_TREE;
     }
 
     while (level <= depth) {
@@ -306,12 +301,12 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
         Node_T newNode = NULL;
 
         status = Path_prefix(path, level, &prefix);
-        if (status != SUCCESS) {
+        if (status != SUCCESS || prefix == NULL) {
             Path_free(path);
             if (firstNewNode != NULL) {
                 Node_free(firstNewNode);
             }
-            return status;
+            return status == SUCCESS ? MEMORY_ERROR : status;
         }
 
         if (level == depth) {
@@ -320,12 +315,12 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
             status = Node_new(prefix, IS_DIRECTORY, currentNode, &newNode);
         }
         Path_free(prefix);
-        if (status != SUCCESS) {
+        if (status != SUCCESS || newNode == NULL || Node_getPath(newNode) == NULL) {
             Path_free(path);
             if (firstNewNode != NULL) {
                 Node_free(firstNewNode);
             }
-            return status;
+            return status == SUCCESS ? MEMORY_ERROR : status;
         }
 
         if (level == depth) {
@@ -365,7 +360,7 @@ boolean FT_containsFile(const char *pcPath) {
     }
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS || Node_getType(node) != IS_FILE) {
+    if (status != SUCCESS || node == NULL || Node_getType(node) != IS_FILE) {
         return FALSE;
     }
 
@@ -380,8 +375,8 @@ int FT_rmFile(const char *pcPath) {
     assert(pcPath != NULL);
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS) {
-        return status;
+    if (status != SUCCESS || node == NULL) {
+        return status == SUCCESS ? NO_SUCH_PATH : status;
     }
 
     if (Node_getType(node) != IS_FILE) {
@@ -404,7 +399,7 @@ void *FT_getFileContents(const char *pcPath) {
     assert(pcPath != NULL);
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS || Node_getType(node) != IS_FILE) {
+    if (status != SUCCESS || node == NULL || Node_getType(node) != IS_FILE) {
         return NULL;
     }
 
@@ -420,7 +415,7 @@ void *FT_replaceFileContents(const char *pcPath, void *pvNewContents, size_t ulN
     assert(pcPath != NULL);
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS || Node_getType(node) != IS_FILE) {
+    if (status != SUCCESS || node == NULL || Node_getType(node) != IS_FILE) {
         return NULL;
     }
 
@@ -443,8 +438,8 @@ int FT_stat(const char *pcPath, boolean *pbIsFile, size_t *pulSize) {
     assert(pulSize != NULL);
 
     status = FT_findNode(pcPath, &node);
-    if (status != SUCCESS) {
-        return status;
+    if (status != SUCCESS || node == NULL) {
+        return status == SUCCESS ? NO_SUCH_PATH : status;
     }
 
     if (Node_getType(node) == IS_FILE) {
