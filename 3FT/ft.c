@@ -1,566 +1,521 @@
 /*--------------------------------------------------------------------*/
 /* ft.c                                                               */
-/* Author: anish                                              */
+/* Author: anish                                            */
 /*--------------------------------------------------------------------*/
 
-#include <stddef.h>
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-#include "dynarray.h"
-#include "path.h"
-#include "nodeFT.h"
 #include "ft.h"
+#include "a4def.h"
+#include "path.h"
+#include "dynarray.h"
+#include "nodeFT.h"
 
-/*
- * A File Tree (FT) represents a hierarchy of files and directories.
- * It maintains the following state variables:
- * 1. isInitialized: a flag indicating whether the FT is initialized.
- * 2. rootNode: a pointer to the root node of the FT.
- * 3. nodeCount: the total number of nodes in the FT.
- */
-
-/* Flag indicating whether the FT has been initialized */
+/* State variables for the File Tree */
 static boolean isInitialized = FALSE;
-/* Pointer to the root node of the FT */
-static Node_T rootNode = NULL;
-/* Total number of nodes in the FT */
+static Node_T root = NULL;
 static size_t nodeCount = 0;
 
-/* --------------------------------------------------------------------
-   The following functions help in traversing the File Tree and finding
-   nodes based on their paths.
-*/
-
-/*
- * Traverses the File Tree (FT) starting from the rootNode towards the given targetPath.
- * If traversal is successful, sets *furthestNode to the deepest node reached (which may
- * be a prefix of targetPath or NULL if the tree is empty).
- * Returns SUCCESS on successful traversal.
- * Returns CONFLICTING_PATH if the root's path is not a prefix of targetPath.
- * Returns MEMORY_ERROR if memory allocation fails during the operation.
- */
-static int FT_traversePath(Path_T targetPath, Node_T *furthestNode) {
+/* Helper function to traverse the File Tree as far as possible towards a given path */
+static int FT_traversePath(Path_T targetPath, Node_T *resultNode) {
     int status;
-    Path_T currentPrefix = NULL;
-    Node_T currentNode;
-    Node_T childNode = NULL;
-    size_t targetDepth;
-    size_t depthIndex;
-    size_t childIndex;
+    Path_T prefixPath = NULL;
+    Node_T currentNode = NULL;
+    size_t depth;
+    size_t level;
 
     assert(targetPath != NULL);
-    assert(furthestNode != NULL);
+    assert(resultNode != NULL);
 
-    /* If the tree is empty, cannot traverse further */
-    if (rootNode == NULL) {
-        *furthestNode = NULL;
+    if (root == NULL) {
+        *resultNode = NULL;
         return SUCCESS;
     }
 
-    /* Get the first prefix (depth 1) of the target path */
-    status = Path_prefix(targetPath, 1, &currentPrefix);
+    /* Check if root's path is a prefix of targetPath */
+    status = Path_prefix(targetPath, 1, &prefixPath);
     if (status != SUCCESS) {
-        *furthestNode = NULL;
+        *resultNode = NULL;
         return status;
     }
 
-    /* If the root's path does not match the first prefix, return CONFLICTING_PATH */
-    if (Path_comparePath(Node_getPath(rootNode), currentPrefix) != 0) {
-        Path_free(currentPrefix);
-        *furthestNode = NULL;
+    if (Path_comparePath(Node_getPath(root), prefixPath) != 0) {
+        Path_free(prefixPath);
+        *resultNode = NULL;
         return CONFLICTING_PATH;
     }
+    Path_free(prefixPath);
 
-    /* Free the prefix as it is no longer needed */
-    Path_free(currentPrefix);
-    currentPrefix = NULL;
+    currentNode = root;
+    depth = Path_getDepth(targetPath);
 
-    /* Start traversal from the root node */
-    currentNode = rootNode;
-    targetDepth = Path_getDepth(targetPath);
+    for (level = 2; level <= depth; level++) {
+        size_t childIndex;
+        boolean found = FALSE;
+        size_t numChildren;
+        Node_T childNode = NULL;
 
-    for (depthIndex = 2; depthIndex <= targetDepth; depthIndex++) {
-        /* Get the prefix of targetPath at the current depth */
-        status = Path_prefix(targetPath, depthIndex, &currentPrefix);
+        status = Path_prefix(targetPath, level, &prefixPath);
         if (status != SUCCESS) {
-            *furthestNode = NULL;
+            *resultNode = NULL;
             return status;
         }
 
-        /* Check if the current node has a child with the current prefix */
-        if (Node_hasChild(currentNode, currentPrefix, &childIndex)) {
-            /* Move to the child node */
-            Path_free(currentPrefix);
-            currentPrefix = NULL;
+        status = Node_getNumChildren(currentNode, &numChildren);
+        if (status != SUCCESS) {
+            Path_free(prefixPath);
+            *resultNode = NULL;
+            return status;
+        }
 
+        for (childIndex = 0; childIndex < numChildren; childIndex++) {
             status = Node_getChild(currentNode, childIndex, &childNode);
             if (status != SUCCESS) {
-                *furthestNode = NULL;
+                Path_free(prefixPath);
+                *resultNode = NULL;
                 return status;
             }
 
+            if (Path_comparePath(Node_getPath(childNode), prefixPath) == 0) {
+                found = TRUE;
+                break;
+            }
+        }
+        Path_free(prefixPath);
+
+        if (found) {
+            if (Node_getType(childNode) == IS_FILE && level != depth) {
+                *resultNode = NULL;
+                return NOT_A_DIRECTORY;
+            }
             currentNode = childNode;
         } else {
-            /* No child with the current prefix; traversal ends here */
             break;
         }
     }
 
-    /* Free the current prefix as it is no longer needed */
-    Path_free(currentPrefix);
-    *furthestNode = currentNode;
+    *resultNode = currentNode;
     return SUCCESS;
 }
 
-/*
- * Finds the node in the File Tree (FT) with the absolute path specified by pathString.
- * If the node is found, sets *resultNode to point to it and returns SUCCESS.
- * Returns INITIALIZATION_ERROR if the FT is not initialized.
- * Returns BAD_PATH if pathString is not a valid path.
- * Returns CONFLICTING_PATH if the root's path is not a prefix of pathString.
- * Returns NO_SUCH_PATH if the node does not exist in the FT.
- * Returns MEMORY_ERROR if memory allocation fails during the operation.
- */
-static int FT_findNode(const char *pathString, Node_T *resultNode) {
-    Path_T targetPath = NULL;
-    Node_T foundNode = NULL;
+/* Helper function to find a node with a given path in the File Tree */
+static int FT_findNode(const char *path, Node_T *foundNode) {
     int status;
+    Path_T searchPath = NULL;
+    Node_T node = NULL;
 
-    assert(pathString != NULL);
-    assert(resultNode != NULL);
+    assert(path != NULL);
+    assert(foundNode != NULL);
 
     if (!isInitialized) {
-        *resultNode = NULL;
+        *foundNode = NULL;
         return INITIALIZATION_ERROR;
     }
 
-    /* Create a Path_T object from the path string */
-    status = Path_new(pathString, &targetPath);
+    status = Path_new(path, &searchPath);
     if (status != SUCCESS) {
-        *resultNode = NULL;
+        *foundNode = NULL;
         return status;
     }
 
-    /* Traverse the FT to find the furthest node towards the target path */
-    status = FT_traversePath(targetPath, &foundNode);
+    status = FT_traversePath(searchPath, &node);
     if (status != SUCCESS) {
-        Path_free(targetPath);
-        *resultNode = NULL;
+        Path_free(searchPath);
+        *foundNode = NULL;
         return status;
     }
 
-    if (foundNode == NULL) {
-        /* The path does not exist in the FT */
-        Path_free(targetPath);
-        *resultNode = NULL;
+    if (node == NULL) {
+        Path_free(searchPath);
+        *foundNode = NULL;
         return NO_SUCH_PATH;
     }
 
-    /* Check if the found node's path matches the target path */
-    if (Path_comparePath(Node_getPath(foundNode), targetPath) != 0) {
-        Path_free(targetPath);
-        *resultNode = NULL;
+    if (Path_comparePath(Node_getPath(node), searchPath) != 0) {
+        Path_free(searchPath);
+        *foundNode = NULL;
         return NO_SUCH_PATH;
     }
 
-    Path_free(targetPath);
-    *resultNode = foundNode;
+    Path_free(searchPath);
+    *foundNode = node;
     return SUCCESS;
 }
 
-/*
- * Removes the node at the specified pathString from the File Tree (FT).
- * The nodeType indicates whether it's a directory or a file.
- * Returns SUCCESS if the node is successfully removed.
- * Returns INITIALIZATION_ERROR if the FT is not initialized.
- * Returns BAD_PATH if pathString is not a valid path.
- * Returns CONFLICTING_PATH if the path conflicts with existing paths in the FT.
- * Returns NO_SUCH_PATH if the node does not exist in the FT.
- * Returns NOT_A_DIRECTORY if attempting to remove a directory but the node is a file.
- * Returns NOT_A_FILE if attempting to remove a file but the node is a directory.
- * Returns MEMORY_ERROR if memory allocation fails during the operation.
- */
-static int FT_rm(const char *pathString, NodeType nodeType) {
-    int status;
-    Node_T targetNode = NULL;
+/* Helper function for pre-order traversal used in FT_toString */
+static void FT_preOrder(Node_T node, DynArray_T array) {
+    size_t numChildren;
+    size_t i;
+    Node_T childNode = NULL;
 
-    assert(pathString != NULL);
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
-
-    status = FT_findNode(pathString, &targetNode);
-    if (status != SUCCESS) {
-        return status;
+    if (node == NULL) {
+        return;
     }
 
-    /* Check if the node type matches */
-    if (Node_getType(targetNode) != nodeType) {
-        if (nodeType == FILE_NODE) {
-            return NOT_A_FILE;
-        } else if (nodeType == DIRECTORY_NODE) {
-            return NOT_A_DIRECTORY;
+    DynArray_add(array, node);
+
+    if (Node_getNumChildren(node, &numChildren) == SUCCESS) {
+        /* First, add file children */
+        for (i = 0; i < numChildren; i++) {
+            if (Node_getChild(node, i, &childNode) == SUCCESS && Node_getType(childNode) == IS_FILE) {
+                FT_preOrder(childNode, array);
+            }
+        }
+        /* Then, add directory children */
+        for (i = 0; i < numChildren; i++) {
+            if (Node_getChild(node, i, &childNode) == SUCCESS && Node_getType(childNode) == IS_DIRECTORY) {
+                FT_preOrder(childNode, array);
+            }
         }
     }
-
-    /* Remove the node and update the node count */
-    nodeCount -= Node_free(targetNode);
-    if (nodeCount == 0) {
-        rootNode = NULL;
-    }
-
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
-    return SUCCESS;
 }
 
-/*
- * Inserts a new node into the File Tree (FT) at the specified pathString.
- * The nodeType indicates whether it's a directory or a file.
- * For files, contents and contentLength specify the file's content and its size.
- * Returns SUCCESS if the node is successfully inserted.
- * Returns INITIALIZATION_ERROR if the FT is not initialized.
- * Returns BAD_PATH if pathString is not a valid path.
- * Returns CONFLICTING_PATH if the path conflicts with existing paths in the FT.
- * Returns NOT_A_DIRECTORY if a prefix of pathString exists as a file.
- * Returns ALREADY_IN_TREE if a node already exists at pathString.
- * Returns MEMORY_ERROR if memory allocation fails during the operation.
- */
-static int FT_insert(const char *pathString, NodeType nodeType, void *contents, size_t contentLength) {
+/* Function to insert a directory into the File Tree */
+int FT_insertDir(const char *path) {
     int status;
-    Path_T targetPath = NULL;
-    Node_T firstNewNode = NULL;
-    Node_T currentNode = NULL;
-    size_t targetDepth, currentDepth;
+    Path_T newPath = NULL;
+    Node_T parentNode = NULL;
+    Node_T newNode = NULL;
+    size_t depth;
+    size_t level;
     size_t newNodesCount = 0;
 
-    assert(pathString != NULL);
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
+    assert(path != NULL);
 
-    /* Validate and create a Path_T object from the path string */
     if (!isInitialized) {
         return INITIALIZATION_ERROR;
     }
 
-    status = Path_new(pathString, &targetPath);
+    status = Path_new(path, &newPath);
     if (status != SUCCESS) {
         return status;
     }
 
-    /* Find the closest ancestor of targetPath that exists in the FT */
-    status = FT_traversePath(targetPath, &currentNode);
+    status = FT_traversePath(newPath, &parentNode);
     if (status != SUCCESS) {
-        Path_free(targetPath);
+        Path_free(newPath);
         return status;
     }
 
-    /* If no ancestor node is found and the FT is not empty, the path is conflicting */
-    if (currentNode == NULL && rootNode != NULL) {
-        Path_free(targetPath);
+    if (parentNode == NULL && root != NULL) {
+        Path_free(newPath);
         return CONFLICTING_PATH;
     }
 
-    targetDepth = Path_getDepth(targetPath);
+    depth = Path_getDepth(newPath);
+    level = parentNode ? Path_getDepth(Node_getPath(parentNode)) + 1 : 1;
 
-    if (currentNode == NULL) {
-        /* Inserting a new root node */
-        if (nodeType == FILE_NODE && targetDepth == 1) {
-            /* Cannot insert a file as the root node */
-            Path_free(targetPath);
-            return CONFLICTING_PATH;
-        }
-        currentDepth = 1;
-    } else {
-        if (Node_getType(currentNode) == FILE_NODE) {
-            /* Cannot insert under a file node */
-            Path_free(targetPath);
-            return NOT_A_DIRECTORY;
-        }
-
-        currentDepth = Path_getDepth(Node_getPath(currentNode)) + 1;
-
-        /* Check if the node already exists */
-        if (currentDepth == targetDepth + 1 && !Path_comparePath(targetPath, Node_getPath(currentNode))) {
-            Path_free(targetPath);
-            return ALREADY_IN_TREE;
-        }
+    if (parentNode && Path_comparePath(Node_getPath(parentNode), newPath) == 0) {
+        Path_free(newPath);
+        return ALREADY_IN_TREE;
     }
 
-    /* Build the rest of the path, one level at a time */
-    while (currentDepth <= targetDepth) {
-        Path_T currentPrefix = NULL;
-        Node_T newNode = NULL;
+    while (level <= depth) {
+        Path_T prefixPath = NULL;
 
-        /* Get the prefix of targetPath at the current depth */
-        status = Path_prefix(targetPath, currentDepth, &currentPrefix);
+        status = Path_prefix(newPath, level, &prefixPath);
         if (status != SUCCESS) {
-            Path_free(targetPath);
-            if (firstNewNode != NULL) {
-                (void) Node_free(firstNewNode);
-            }
-            assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
+            Path_free(newPath);
             return status;
         }
 
-        /* Insert a new node at this level */
-        if (currentDepth < targetDepth) {
-            /* Intermediate nodes are directories */
-            status = Node_new(currentPrefix, currentNode, &newNode, DIRECTORY_NODE);
-        } else {
-            /* The final node is of the specified nodeType */
-            status = Node_new(currentPrefix, currentNode, &newNode, nodeType);
-            if (status == SUCCESS && nodeType == FILE_NODE) {
-                /* Set the file contents */
-                Node_setFileContents(newNode, contents, contentLength);
-            }
-        }
-
+        status = Node_create(prefixPath, IS_DIRECTORY, parentNode, &newNode);
         if (status != SUCCESS) {
-            Path_free(targetPath);
-            Path_free(currentPrefix);
-            if (firstNewNode != NULL) {
-                (void) Node_free(firstNewNode);
-            }
-            assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
+            Path_free(prefixPath);
+            Path_free(newPath);
             return status;
         }
 
-        /* Prepare for the next level */
-        Path_free(currentPrefix);
-        currentNode = newNode;
+        parentNode = newNode;
+        if (root == NULL) {
+            root = newNode;
+        }
         newNodesCount++;
-        if (firstNewNode == NULL) {
-            firstNewNode = currentNode;
-        }
-        currentDepth++;
+        level++;
+        Path_free(prefixPath);
     }
 
-    Path_free(targetPath);
-
-    /* Update the FT's state variables */
-    if (rootNode == NULL) {
-        rootNode = firstNewNode;
-    }
     nodeCount += newNodesCount;
-
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
+    Path_free(newPath);
     return SUCCESS;
 }
 
-/* -------------------------------------------------------------------- */
-
-int FT_insertDir(const char *pathString) {
-    assert(pathString != NULL);
-
-    return FT_insert(pathString, DIRECTORY_NODE, NULL, 0);
-}
-
-boolean FT_containsDir(const char *pathString) {
-    Node_T targetNode = NULL;
+/* Function to check if a directory exists in the File Tree */
+boolean FT_containsDir(const char *path) {
     int status;
+    Node_T node = NULL;
 
-    assert(pathString != NULL);
+    assert(path != NULL);
 
-    status = FT_findNode(pathString, &targetNode);
-    if (status != SUCCESS) {
+    if (root == NULL) {
         return FALSE;
     }
 
-    return (boolean)(Node_getType(targetNode) == DIRECTORY_NODE);
-}
-
-int FT_rmDir(const char *pathString) {
-    assert(pathString != NULL);
-
-    return FT_rm(pathString, DIRECTORY_NODE);
-}
-
-int FT_insertFile(const char *pathString, void *contents, size_t contentLength) {
-    assert(pathString != NULL);
-
-    return FT_insert(pathString, FILE_NODE, contents, contentLength);
-}
-
-boolean FT_containsFile(const char *pathString) {
-    Node_T targetNode = NULL;
-    int status;
-
-    assert(pathString != NULL);
-
-    status = FT_findNode(pathString, &targetNode);
-    if (status != SUCCESS) {
+    status = FT_findNode(path, &node);
+    if (status != SUCCESS || Node_getType(node) != IS_DIRECTORY) {
         return FALSE;
     }
 
-    return (boolean)(Node_getType(targetNode) == FILE_NODE);
+    return TRUE;
 }
 
-int FT_rmFile(const char *pathString) {
-    assert(pathString != NULL);
-
-    return FT_rm(pathString, FILE_NODE);
-}
-
-void *FT_getFileContents(const char *pathString) {
+/* Function to remove a directory from the File Tree */
+int FT_rmDir(const char *path) {
     int status;
-    Node_T targetNode = NULL;
+    Node_T node = NULL;
 
-    assert(pathString != NULL);
+    assert(path != NULL);
 
-    status = FT_findNode(pathString, &targetNode);
+    status = FT_findNode(path, &node);
     if (status != SUCCESS) {
-        return NULL;
+        return status;
     }
 
-    if (Node_getType(targetNode) != FILE_NODE) {
-        /* The node is not a file */
-        return NULL;
+    if (Node_getType(node) != IS_DIRECTORY) {
+        return NOT_A_DIRECTORY;
     }
 
-    return Node_getFileContents(targetNode);
+    nodeCount -= Node_destroy(node);
+    if (nodeCount == 0) {
+        root = NULL;
+    }
+
+    return SUCCESS;
 }
 
-void *FT_replaceFileContents(const char *pathString, void *newContents, size_t newLength) {
+/* Function to insert a file into the File Tree */
+int FT_insertFile(const char *path, void *contents, size_t length) {
     int status;
-    Node_T targetNode = NULL;
+    Path_T newPath = NULL;
+    Node_T parentNode = NULL;
+    Node_T newNode = NULL;
+    size_t depth;
+    size_t level;
+    size_t newNodesCount = 0;
+
+    assert(path != NULL);
+    assert(contents != NULL);
+
+    if (!isInitialized) {
+        return INITIALIZATION_ERROR;
+    }
+
+    status = Path_new(path, &newPath);
+    if (status != SUCCESS) {
+        return status;
+    }
+
+    if (Path_getDepth(newPath) == 1) {
+        Path_free(newPath);
+        return CONFLICTING_PATH;
+    }
+
+    status = FT_traversePath(newPath, &parentNode);
+    if (status != SUCCESS) {
+        Path_free(newPath);
+        return status;
+    }
+
+    if (parentNode == NULL && root != NULL) {
+        Path_free(newPath);
+        return CONFLICTING_PATH;
+    }
+
+    depth = Path_getDepth(newPath);
+    level = parentNode ? Path_getDepth(Node_getPath(parentNode)) + 1 : 1;
+
+    if (parentNode && Path_comparePath(Node_getPath(parentNode), newPath) == 0) {
+        Path_free(newPath);
+        return ALREADY_IN_TREE;
+    }
+
+    while (level <= depth) {
+        Path_T prefixPath = NULL;
+
+        status = Path_prefix(newPath, level, &prefixPath);
+        if (status != SUCCESS) {
+            Path_free(newPath);
+            return status;
+        }
+
+        if (level == depth) {
+            status = Node_create(prefixPath, IS_FILE, parentNode, &newNode);
+            if (status != SUCCESS) {
+                Path_free(prefixPath);
+                Path_free(newPath);
+                return status;
+            }
+            status = Node_setContents(newNode, contents, length);
+            if (status != SUCCESS) {
+                Path_free(prefixPath);
+                Path_free(newPath);
+                return status;
+            }
+        } else {
+            status = Node_create(prefixPath, IS_DIRECTORY, parentNode, &newNode);
+            if (status != SUCCESS) {
+                Path_free(prefixPath);
+                Path_free(newPath);
+                return status;
+            }
+        }
+
+        parentNode = newNode;
+        if (root == NULL) {
+            root = newNode;
+        }
+        newNodesCount++;
+        level++;
+        Path_free(prefixPath);
+    }
+
+    nodeCount += newNodesCount;
+    Path_free(newPath);
+    return SUCCESS;
+}
+
+/* Function to check if a file exists in the File Tree */
+boolean FT_containsFile(const char *path) {
+    int status;
+    Node_T node = NULL;
+
+    assert(path != NULL);
+
+    if (root == NULL) {
+        return FALSE;
+    }
+
+    status = FT_findNode(path, &node);
+    if (status != SUCCESS || Node_getType(node) != IS_FILE) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/* Function to remove a file from the File Tree */
+int FT_rmFile(const char *path) {
+    int status;
+    Node_T node = NULL;
+
+    assert(path != NULL);
+
+    status = FT_findNode(path, &node);
+    if (status != SUCCESS) {
+        return status;
+    }
+
+    if (Node_getType(node) != IS_FILE) {
+        return NOT_A_FILE;
+    }
+
+    nodeCount -= Node_destroy(node);
+    if (nodeCount == 0) {
+        root = NULL;
+    }
+
+    return SUCCESS;
+}
+
+/* Function to get the contents of a file */
+void *FT_getFileContents(const char *path) {
+    int status;
+    Node_T node = NULL;
+
+    assert(path != NULL);
+
+    status = FT_findNode(path, &node);
+    if (status != SUCCESS || Node_getType(node) != IS_FILE) {
+        return NULL;
+    }
+
+    return Node_getContents(node);
+}
+
+/* Function to replace the contents of a file */
+void *FT_replaceFileContents(const char *path, void *newContents, size_t newLength) {
+    int status;
+    Node_T node = NULL;
     void *oldContents = NULL;
 
-    assert(pathString != NULL);
+    assert(path != NULL);
+    assert(newContents != NULL);
 
-    status = FT_findNode(pathString, &targetNode);
+    status = FT_findNode(path, &node);
+    if (status != SUCCESS || Node_getType(node) != IS_FILE) {
+        return NULL;
+    }
+
+    oldContents = Node_getContents(node);
+    status = Node_setContents(node, newContents, newLength);
     if (status != SUCCESS) {
         return NULL;
     }
-
-    if (Node_getType(targetNode) != FILE_NODE) {
-        /* The node is not a file */
-        return NULL;
-    }
-
-    /* Replace the file contents */
-    oldContents = Node_getFileContents(targetNode);
-    Node_setFileContents(targetNode, newContents, newLength);
 
     return oldContents;
 }
 
-int FT_stat(const char *pathString, boolean *isFile, size_t *size) {
+/* Function to get information about a node in the File Tree */
+int FT_stat(const char *path, boolean *isFile, size_t *size) {
     int status;
-    Node_T targetNode = NULL;
+    Node_T node = NULL;
 
-    assert(pathString != NULL);
+    assert(path != NULL);
     assert(isFile != NULL);
     assert(size != NULL);
 
-    status = FT_findNode(pathString, &targetNode);
+    status = FT_findNode(path, &node);
     if (status != SUCCESS) {
         return status;
     }
 
-    if (Node_getType(targetNode) == FILE_NODE) {
+    if (Node_getType(node) == IS_FILE) {
         *isFile = TRUE;
-        *size = Node_getFileLength(targetNode);
+        *size = Node_getSize(node);
     } else {
         *isFile = FALSE;
-        *size = 0;
     }
 
     return SUCCESS;
 }
 
+/* Function to initialize the File Tree */
 int FT_init(void) {
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
-
     if (isInitialized) {
         return INITIALIZATION_ERROR;
     }
 
     isInitialized = TRUE;
-    rootNode = NULL;
+    root = NULL;
     nodeCount = 0;
 
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
     return SUCCESS;
 }
 
+/* Function to destroy the File Tree */
 int FT_destroy(void) {
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
-
     if (!isInitialized) {
         return INITIALIZATION_ERROR;
     }
 
-    if (rootNode != NULL) {
-        nodeCount -= Node_free(rootNode);
-        rootNode = NULL;
+    if (root != NULL) {
+        nodeCount -= Node_destroy(root);
+        root = NULL;
     }
 
     isInitialized = FALSE;
-
-    assert(CheckerFT_isValid(isInitialized, rootNode, nodeCount));
     return SUCCESS;
 }
 
-/* --------------------------------------------------------------------
-   The following auxiliary functions are used for generating the
-   string representation of the FT.
-*/
-
-/*
- * Performs a pre-order traversal of the tree rooted at node,
- * inserting each node into the dynamic array dynArray starting at index.
- * Returns the next unused index in dynArray after the insertion(s).
- */
-static size_t FT_preOrderTraversal(Node_T node, DynArray_T dynArray, size_t index) {
-    size_t childCount;
-    size_t i;
-    int status;
-    Node_T childNode = NULL;
-
-    assert(dynArray != NULL);
-
-    if (node != NULL) {
-        (void) DynArray_set(dynArray, index, node);
-        index++;
-
-        childCount = Node_getNumChildren(node);
-        for (i = 0; i < childCount; i++) {
-            status = Node_getChild(node, i, &childNode);
-            assert(status == SUCCESS);
-            index = FT_preOrderTraversal(childNode, dynArray, index);
-        }
-    }
-    return index;
-}
-
-/*
- * Calculates the total length of the string representation of the FT.
- * Adds the length of the node's path plus one (for the newline character) to *accumulator.
- */
-static void FT_strlenAccumulate(Node_T node, size_t *accumulator) {
-    assert(accumulator != NULL);
-
-    if (node != NULL) {
-        *accumulator += (Path_getStrLength(Node_getPath(node)) + 1);
-    }
-}
-
-/*
- * Concatenates the node's path to the string accumulator, followed by a newline character.
- */
-static void FT_strcatAccumulate(Node_T node, char *accumulator) {
-    assert(accumulator != NULL);
-
-    if (node != NULL) {
-        strcat(accumulator, Path_getPathname(Node_getPath(node)));
-        strcat(accumulator, "\n");
-    }
-}
-
+/* Function to generate a string representation of the File Tree */
 char *FT_toString(void) {
     DynArray_T nodesArray;
-    size_t totalStrLength = 1; /* Start with 1 for the null terminator */
+    size_t totalLength = 1; /* For null terminator */
     char *resultString = NULL;
+    size_t i;
 
     if (!isInitialized) {
         return NULL;
@@ -571,24 +526,26 @@ char *FT_toString(void) {
         return NULL;
     }
 
-    /* Perform pre-order traversal to fill the nodesArray */
-    (void) FT_preOrderTraversal(rootNode, nodesArray, 0);
+    FT_preOrder(root, nodesArray);
 
-    /* Calculate the total length of the string representation */
-    DynArray_map(nodesArray, (void (*)(void *, void *)) FT_strlenAccumulate, (void *) &totalStrLength);
+    for (i = 0; i < DynArray_getLength(nodesArray); i++) {
+        Node_T node = DynArray_get(nodesArray, i);
+        totalLength += Path_getStrLength(Node_getPath(node)) + 1; /* +1 for newline */
+    }
 
-    /* Allocate memory for the result string */
-    resultString = malloc(totalStrLength);
+    resultString = malloc(totalLength);
     if (resultString == NULL) {
         DynArray_free(nodesArray);
         return NULL;
     }
     *resultString = '\0';
 
-    /* Concatenate the paths into the result string */
-    DynArray_map(nodesArray, (void (*)(void *, void *)) FT_strcatAccumulate, (void *) resultString);
+    for (i = 0; i < DynArray_getLength(nodesArray); i++) {
+        Node_T node = DynArray_get(nodesArray, i);
+        strcat(resultString, Path_getPathname(Node_getPath(node)));
+        strcat(resultString, "\n");
+    }
 
     DynArray_free(nodesArray);
-
     return resultString;
 }

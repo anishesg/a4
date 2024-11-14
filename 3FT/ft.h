@@ -150,4 +150,3 @@ int FT_destroy(void);
 char *FT_toString(void);
 
 #endif
-å

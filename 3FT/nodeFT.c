@@ -1,196 +1,91 @@
 /*--------------------------------------------------------------------*/
-/* nodeFT.c                                                           */
-/* Author: [Your Name]                                                */
+/* nodeFT.c                                                             */
+/* Author: anish                                              */
 /*--------------------------------------------------------------------*/
 
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
+
 #include "nodeFT.h"
-#include "path.h"
+#include "a4def.h"
 #include "dynarray.h"
+#include "path.h"
 
-/*
- * A node in the File Tree (FT) represents either a file or a directory.
- * Each node maintains the following:
- * - path: the absolute path of the node.
- * - parent: a pointer to the parent node.
- * - children: a dynamic array of child nodes (for directories).
- * - type: the type of the node (FILE_NODE or DIRECTORY_NODE).
- * - contents: a pointer to the file contents (for files).
- * - contentLength: the size of the file contents in bytes (for files).
- */
-
+/* Structure representing a node in the File Tree */
 struct node {
-    Path_T path;              /* The absolute path of this node */
-    Node_T parent;            /* Pointer to the parent node */
-    DynArray_T children;      /* Dynamic array of child nodes */
-    NodeType type;            /* Type of the node: FILE_NODE or DIRECTORY_NODE */
-    void *contents;           /* Contents of the file (if FILE_NODE) */
-    size_t contentLength;     /* Size of the contents (if FILE_NODE) */
+    Path_T path;
+    Node_T parent;
+    DynArray_T children;
+    nodeType type;
+    void *contents;
+    size_t size;
 };
 
-/*
- * Helper function to compare two nodes based on their paths.
- * Returns <0 if firstNode < secondNode, 0 if they are equal, >0 otherwise.
- */
-static int Node_compare(Node_T firstNode, Node_T secondNode) {
-    assert(firstNode != NULL);
-    assert(secondNode != NULL);
+/* Helper function to compare nodes based on their paths */
+static int Node_compare(const void *first, const void *second) {
+    Node_T node1 = *(Node_T *)first;
+    Node_T node2 = *(Node_T *)second;
 
-    return Path_comparePath(firstNode->path, secondNode->path);
+    return Path_comparePath(node1->path, node2->path);
 }
 
-/*
- * Helper function to compare a node's path with a given path string.
- * Returns <0 if node's path < pathString, 0 if equal, >0 otherwise.
- */
-static int Node_compareString(const Node_T node, const char *pathString) {
-    assert(node != NULL);
-    assert(pathString != NULL);
-
-    return Path_compareString(node->path, pathString);
-}
-
-/*
- * Adds a child node to the parent node's children array at the specified index.
- * Returns SUCCESS if the child is added successfully.
- * Returns MEMORY_ERROR if memory allocation fails.
- */
-static int Node_addChild(Node_T parentNode, Node_T childNode, size_t index) {
-    assert(parentNode != NULL);
-    assert(childNode != NULL);
-
-    if (DynArray_addAt(parentNode->children, index, childNode)) {
-        return SUCCESS;
-    } else {
-        return MEMORY_ERROR;
-    }
-}
-
-/*
- * Creates a new node with the specified path, parent, and type.
- * For files, contents and contentLength specify the file's content and size.
- * Returns SUCCESS if the node is created successfully.
- * Returns CONFLICTING_PATH if there is a path conflict.
- * Returns NO_SUCH_PATH if the parent path does not exist.
- * Returns ALREADY_IN_TREE if a node already exists at the given path.
- * Returns MEMORY_ERROR if memory allocation fails.
- */
-int Node_new(Path_T nodePath, Node_T parentNode, Node_T *resultNode, NodeType nodeType) {
-    Node_T newNode = NULL;
-    Path_T parentPath = NULL;
-    Path_T newPath = NULL;
-    size_t parentDepth;
-    size_t sharedDepth;
+/* Helper function to find the insertion index for a child node */
+static size_t Node_findChildIndex(Node_T parent, Path_T childPath) {
+    size_t numChildren = DynArray_getLength(parent->children);
     size_t index;
+
+    for (index = 0; index < numChildren; index++) {
+        Node_T child = DynArray_get(parent->children, index);
+        if (Path_comparePath(child->path, childPath) >= 0) {
+            break;
+        }
+    }
+
+    return index;
+}
+
+/* Function to create a new node */
+int Node_create(Path_T path, nodeType type, Node_T parent, Node_T *resultNode) {
+    Node_T newNode = NULL;
     int status;
 
-    assert(nodePath != NULL);
+    assert(path != NULL);
     assert(resultNode != NULL);
-    /* parentNode can be NULL for the root node */
 
-    /* Allocate memory for the new node */
     newNode = malloc(sizeof(struct node));
     if (newNode == NULL) {
         *resultNode = NULL;
         return MEMORY_ERROR;
     }
 
-    /* Duplicate the path for the new node */
-    status = Path_dup(nodePath, &newPath);
+    status = Path_dup(path, &newNode->path);
     if (status != SUCCESS) {
         free(newNode);
         *resultNode = NULL;
         return status;
     }
-    newNode->path = newPath;
 
-    /* Initialize contents and contentLength for files */
-    if (nodeType == FILE_NODE) {
-        newNode->contents = NULL;
-        newNode->contentLength = 0;
-    } else {
-        newNode->contents = NULL;
-        newNode->contentLength = 0;
+    newNode->type = type;
+    newNode->parent = parent;
+    newNode->contents = NULL;
+    newNode->size = 0;
+    newNode->children = DynArray_new(0);
+    if (newNode->children == NULL) {
+        Path_free(newNode->path);
+        free(newNode);
+        *resultNode = NULL;
+        return MEMORY_ERROR;
     }
 
-    newNode->type = nodeType;
-    newNode->parent = parentNode;
-
-    /* Initialize the children array for directories */
-    if (nodeType == DIRECTORY_NODE) {
-        newNode->children = DynArray_new(0);
-        if (newNode->children == NULL) {
+    if (parent != NULL) {
+        size_t index = Node_findChildIndex(parent, path);
+        if (DynArray_addAt(parent->children, index, newNode) == FALSE) {
             Path_free(newNode->path);
+            DynArray_free(newNode->children);
             free(newNode);
             *resultNode = NULL;
             return MEMORY_ERROR;
-        }
-    } else {
-        newNode->children = NULL;
-    }
-
-    /* Validate and set the new node's parent */
-    if (parentNode != NULL) {
-        parentPath = parentNode->path;
-        parentDepth = Path_getDepth(parentPath);
-        sharedDepth = Path_getSharedPrefixDepth(newNode->path, parentPath);
-
-        /* The parent must be an ancestor of the new node */
-        if (sharedDepth < parentDepth) {
-            if (newNode->children != NULL) {
-                DynArray_free(newNode->children);
-            }
-            Path_free(newNode->path);
-            free(newNode);
-            *resultNode = NULL;
-            return CONFLICTING_PATH;
-        }
-
-        /* The new node must be directly under the parent */
-        if (Path_getDepth(newNode->path) != parentDepth + 1) {
-            if (newNode->children != NULL) {
-                DynArray_free(newNode->children);
-            }
-            Path_free(newNode->path);
-            free(newNode);
-            *resultNode = NULL;
-            return NO_SUCH_PATH;
-        }
-
-        /* The parent must not already have a child with this path */
-        if (Node_hasChild(parentNode, nodePath, &index)) {
-            if (newNode->children != NULL) {
-                DynArray_free(newNode->children);
-            }
-            Path_free(newNode->path);
-            free(newNode);
-            *resultNode = NULL;
-            return ALREADY_IN_TREE;
-        }
-
-        /* Add the new node to the parent's children */
-        status = Node_addChild(parentNode, newNode, index);
-        if (status != SUCCESS) {
-            if (newNode->children != NULL) {
-                DynArray_free(newNode->children);
-            }
-            Path_free(newNode->path);
-            free(newNode);
-            *resultNode = NULL;
-            return status;
-        }
-    } else {
-        /* For root node, the depth must be 1 */
-        if (Path_getDepth(newNode->path) != 1) {
-            if (newNode->children != NULL) {
-                DynArray_free(newNode->children);
-            }
-            Path_free(newNode->path);
-            free(newNode);
-            *resultNode = NULL;
-            return NO_SUCH_PATH;
         }
     }
 
@@ -198,191 +93,142 @@ int Node_new(Path_T nodePath, Node_T parentNode, Node_T *resultNode, NodeType no
     return SUCCESS;
 }
 
-/*
- * Frees the node and all of its descendants recursively.
- * Returns the number of nodes freed.
- */
-size_t Node_free(Node_T node) {
+/* Function to destroy a node and its descendants */
+size_t Node_destroy(Node_T node) {
     size_t count = 0;
+    size_t numChildren;
     size_t i;
 
     assert(node != NULL);
 
-    /* Remove from parent's children array */
-    if (node->parent != NULL && node->parent->children != NULL) {
+    if (node->parent != NULL) {
         size_t index;
-        if (DynArray_bsearch(node->parent->children, node, &index, (int (*)(const void *, const void *)) Node_compare)) {
-            (void) DynArray_removeAt(node->parent->children, index);
+        for (index = 0; index < DynArray_getLength(node->parent->children); index++) {
+            if (DynArray_get(node->parent->children, index) == node) {
+                DynArray_removeAt(node->parent->children, index);
+                break;
+            }
         }
     }
 
-    /* Recursively free children (if directory) */
-    if (node->type == DIRECTORY_NODE && node->children != NULL) {
-        while (DynArray_getLength(node->children) > 0) {
-            Node_T childNode = DynArray_get(node->children, 0);
-            count += Node_free(childNode);
-        }
-        DynArray_free(node->children);
+    numChildren = DynArray_getLength(node->children);
+    for (i = 0; i < numChildren; i++) {
+        Node_T child = DynArray_get(node->children, i);
+        count += Node_destroy(child);
     }
 
-    /* Free the path */
+    DynArray_free(node->children);
     Path_free(node->path);
-
-    /* Free the node itself */
     free(node);
     count++;
 
     return count;
 }
 
-/*
- * Returns the path of the node.
- */
+/* Function to get the path of a node */
 Path_T Node_getPath(Node_T node) {
     assert(node != NULL);
-
     return node->path;
 }
 
-/*
- * Checks if the node has a child with the specified path.
- * If found, sets *childIndex to the index of the child in the children array.
- * Returns TRUE if the child is found, FALSE otherwise.
- */
-boolean Node_hasChild(Node_T node, Path_T childPath, size_t *childIndex) {
+/* Function to get the type of a node */
+nodeType Node_getType(Node_T node) {
     assert(node != NULL);
-    assert(childPath != NULL);
-    assert(childIndex != NULL);
-
-    if (node->children == NULL) {
-        return FALSE;
-    }
-
-    return DynArray_bsearch(node->children, (char *) Path_getPathname(childPath), childIndex, (int (*)(const void *, const void *)) Node_compareString);
+    return node->type;
 }
 
-/*
- * Returns the number of children the node has.
- */
-size_t Node_getNumChildren(Node_T node) {
+/* Function to get the contents of a node (file) */
+void *Node_getContents(Node_T node) {
     assert(node != NULL);
-
-    if (node->children == NULL) {
-        return 0;
+    if (node->type == IS_FILE) {
+        return node->contents;
     }
-
-    return DynArray_getLength(node->children);
+    return NULL;
 }
 
-/*
- * Retrieves the child node at the specified index.
- * Returns SUCCESS if the child is retrieved successfully.
- * Returns NO_SUCH_PATH if the index is out of bounds.
- */
-int Node_getChild(Node_T node, size_t childIndex, Node_T *childNode) {
+/* Function to set the contents of a node (file) */
+int Node_setContents(Node_T node, void *contents, size_t size) {
+    assert(node != NULL);
+
+    if (node->type != IS_FILE) {
+        return NOT_A_FILE;
+    }
+
+    node->contents = contents;
+    node->size = size;
+
+    return SUCCESS;
+}
+
+/* Function to get the size of a node's contents */
+size_t Node_getSize(Node_T node) {
+    assert(node != NULL);
+
+    if (node->type == IS_FILE) {
+        return node->size;
+    }
+    return 0;
+}
+
+/* Function to get the number of children of a node */
+int Node_getNumChildren(Node_T node, size_t *numChildren) {
+    assert(node != NULL);
+    assert(numChildren != NULL);
+
+    if (node->type != IS_DIRECTORY) {
+        return NOT_A_DIRECTORY;
+    }
+
+    *numChildren = DynArray_getLength(node->children);
+    return SUCCESS;
+}
+
+/* Function to get a child node by index */
+int Node_getChild(Node_T node, size_t index, Node_T *childNode) {
     assert(node != NULL);
     assert(childNode != NULL);
 
-    if (node->children == NULL || childIndex >= Node_getNumChildren(node)) {
+    if (node->type != IS_DIRECTORY) {
+        return NOT_A_DIRECTORY;
+    }
+
+    if (index >= DynArray_getLength(node->children)) {
         *childNode = NULL;
         return NO_SUCH_PATH;
     }
 
-    *childNode = DynArray_get(node->children, childIndex);
+    *childNode = DynArray_get(node->children, index);
     return SUCCESS;
 }
 
-/*
- * Returns the parent of the node.
- */
+/* Function to get the parent of a node */
 Node_T Node_getParent(Node_T node) {
     assert(node != NULL);
-
     return node->parent;
 }
 
-/*
- * Returns the type of the node: FILE_NODE or DIRECTORY_NODE.
- */
-NodeType Node_getType(Node_T node) {
-    assert(node != NULL);
-
-    return node->type;
-}
-
-/*
- * Sets the contents and contentLength of a file node.
- * For directories, this function has no effect.
- */
-void Node_setFileContents(Node_T node, void *contents, size_t contentLength) {
-    assert(node != NULL);
-
-    if (node->type == FILE_NODE) {
-        node->contents = contents;
-        node->contentLength = contentLength;
-    }
-}
-
-/*
- * Retrieves the contents of a file node.
- * Returns NULL if the node is not a file or has no contents.
- */
-void *Node_getFileContents(Node_T node) {
-    assert(node != NULL);
-
-    if (node->type == FILE_NODE) {
-        return node->contents;
-    } else {
-        return NULL;
-    }
-}
-
-/*
- * Returns the length of the file contents.
- * Returns 0 if the node is not a file.
- */
-size_t Node_getFileLength(Node_T node) {
-    assert(node != NULL);
-
-    if (node->type == FILE_NODE) {
-        return node->contentLength;
-    } else {
-        return 0;
-    }
-}
-
-/*
- * Replaces the contents of a file node with new contents.
- * Returns the old contents.
- * For directories, this function returns NULL.
- */
-void *Node_replaceFileContents(Node_T node, void *newContents, size_t newLength) {
-    void *oldContents = NULL;
+/* Function to check if a node has a child with a given path */
+boolean Node_hasChild(Node_T node, Path_T path, size_t *childIndex) {
+    size_t numChildren;
+    size_t i;
 
     assert(node != NULL);
+    assert(path != NULL);
+    assert(childIndex != NULL);
 
-    if (node->type == FILE_NODE) {
-        oldContents = node->contents;
-        node->contents = newContents;
-        node->contentLength = newLength;
+    numChildren = DynArray_getLength(node->children);
+
+    for (i = 0; i < numChildren; i++) {
+        Node_T child = DynArray_get(node->children, i);
+        int cmp = Path_comparePath(Node_getPath(child), path);
+        if (cmp == 0) {
+            *childIndex = i;
+            return TRUE;
+        } else if (cmp > 0) {
+            break;
+        }
     }
 
-    return oldContents;
-}
-
-/*
- * Creates a string representation of the node's path.
- * Returns a dynamically allocated string that should be freed by the caller.
- */
-char *Node_toString(Node_T node) {
-    char *pathCopy;
-
-    assert(node != NULL);
-
-    pathCopy = malloc(Path_getStrLength(node->path) + 1);
-    if (pathCopy == NULL) {
-        return NULL;
-    }
-
-    return strcpy(pathCopy, Path_getPathname(node->path));
+    *childIndex = i;
+    return FALSE;
 }
