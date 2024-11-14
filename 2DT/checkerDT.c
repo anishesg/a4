@@ -21,15 +21,13 @@ static boolean CheckerDT_treeCheck(Node_T oNNode);
 static size_t ulVerifiedNodeCount = 0;
 
 /* 
- * checks if a child node’s parent pointer correctly references the
- * expected parent. this makes sure that each child node points back 
- * to the correct parent.
+ * this function checks if a child node's parent pointer correctly references the expected parent node.
+ * it ensures that the child node (oChildNode) points back to its parent node (oParentNode).
+ * returns TRUE if the parent reference is correct, FALSE otherwise.
  */
-static boolean validateChildParentReference(Node_T oParentNode, Node_T oChildNode, size_t childIndex) {
-    /* retrieve the parent of the child node */
+static boolean CheckerDT_validateChildParentReference(Node_T oParentNode, Node_T oChildNode, size_t childIndex) {
     Node_T oActualParent = Node_getParent(oChildNode);
     
-    /* check if the actual parent matches the expected parent */
     if (oActualParent != oParentNode) {
         fprintf(stderr, "validation error: child node at index %lu has an incorrect parent reference.\n"
                         "expected parent: %p, found parent: %p.\n", 
@@ -41,18 +39,17 @@ static boolean validateChildParentReference(Node_T oParentNode, Node_T oChildNod
 }
 
 /* 
- * checks for duplicate child nodes by comparing the current child
- * with all previously processed child nodes. we’re ensuring there 
- * aren’t two nodes with the same name under the same parent.
+ * this function checks for duplicate child nodes under a parent node.
+ * it compares the current child node (oChildNode) with all previously processed child nodes.
+ * we ensure that there aren't two nodes with the same name under the same parent (oParentNode).
+ * returns TRUE if no duplicates are found, FALSE otherwise.
  */
-static boolean checkForDuplicateChildren(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
+static boolean CheckerDT_checkForDuplicateChildren(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
     size_t compareIdx;
     Node_T oComparisonNode = NULL;
     int status;
 
-    /* loop through all previous children to look for duplicates */
     for (compareIdx = 0; compareIdx < currentIndex; compareIdx++) {
-        /* get the child node at compareIdx */
         status = Node_getChild(oParentNode, compareIdx, &oComparisonNode);
         if (status != SUCCESS) {
             fprintf(stderr, "validation error: failed to retrieve comparison child node at index %lu.\n"
@@ -61,7 +58,6 @@ static boolean checkForDuplicateChildren(Node_T oParentNode, Node_T oChildNode, 
             return FALSE;
         }
 
-        /* compare the current child with the comparison child */
         if (Node_compare(oChildNode, oComparisonNode) == 0) {
             fprintf(stderr, "validation error: duplicate child nodes found at indices %lu and %lu.\n"
                             "each child must be unique under the same parent.\n",
@@ -74,17 +70,15 @@ static boolean checkForDuplicateChildren(Node_T oParentNode, Node_T oChildNode, 
 }
 
 /* 
- * verifies that child nodes are stored in lexicographical order.
- * makes sure each child node is in the correct position relative
- * to its neighboring nodes.
+ * this function ensures that child nodes are stored in lexicographical order.
+ * it compares the current child node (oChildNode) with its previous sibling under the same parent (oParentNode).
+ * returns TRUE if the child nodes are in lexicographical order, FALSE otherwise.
  */
-static boolean verifyLexicographicalOrder(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
-    /* only check if there is at least one previous child */
+static boolean CheckerDT_verifyLexicographicalOrder(Node_T oParentNode, Node_T oChildNode, size_t currentIndex) {
     if (currentIndex > 0) {
         Node_T oPrevChildNode = NULL;
         int status;
 
-        /* retrieve the previous child node */
         status = Node_getChild(oParentNode, currentIndex - 1, &oPrevChildNode);
         if (status != SUCCESS) {
             fprintf(stderr, "validation error: unable to retrieve previous child node at index %lu.\n"
@@ -93,7 +87,6 @@ static boolean verifyLexicographicalOrder(Node_T oParentNode, Node_T oChildNode,
             return FALSE;
         }
 
-        /* make sure the current child is lexicographically after the previous */
         if (strcmp(Path_getPathname(Node_getPath(oPrevChildNode)),
                    Path_getPathname(Node_getPath(oChildNode))) > 0) {
             fprintf(stderr, "validation error: children are not in lexicographic order between indices %lu and %lu.\n"
@@ -107,14 +100,15 @@ static boolean verifyLexicographicalOrder(Node_T oParentNode, Node_T oChildNode,
 }
 
 /* 
- * checks a single child node to make sure it meets all rules.
- * does parent reference check, duplicate detection, and order verification.
+ * this function validates a single child node under a parent node.
+ * it performs parent reference check, duplicate detection, and lexicographical order verification.
+ * it takes the parent node (oParentNode) and the index of the child node (childIndex).
+ * returns TRUE if the child node passes all checks, FALSE otherwise.
  */
-static boolean validateChildNode(Node_T oParentNode, size_t childIndex) {
+static boolean CheckerDT_validateChildNode(Node_T oParentNode, size_t childIndex) {
     Node_T oChildNode = NULL;
     int status;
 
-    /* get the child node at the specified index */
     status = Node_getChild(oParentNode, childIndex, &oChildNode);
     if (status != SUCCESS) {
         fprintf(stderr, "validation error: Node_getChild failed at child index %lu.\n"
@@ -123,22 +117,18 @@ static boolean validateChildNode(Node_T oParentNode, size_t childIndex) {
         return FALSE;
     }
 
-    /* confirm the child’s parent is set correctly */
-    if (!validateChildParentReference(oParentNode, oChildNode, childIndex)) {
+    if (!CheckerDT_validateChildParentReference(oParentNode, oChildNode, childIndex)) {
         return FALSE;
     }
 
-    /* check for duplicate nodes under the same parent */
-    if (!checkForDuplicateChildren(oParentNode, oChildNode, childIndex)) {
+    if (!CheckerDT_checkForDuplicateChildren(oParentNode, oChildNode, childIndex)) {
         return FALSE;
     }
 
-    /* make sure nodes are sorted lexicographically */
-    if (!verifyLexicographicalOrder(oParentNode, oChildNode, childIndex)) {
+    if (!CheckerDT_verifyLexicographicalOrder(oParentNode, oChildNode, childIndex)) {
         return FALSE;
     }
 
-    /* now check the subtree rooted at this child */
     if (!CheckerDT_treeCheck(oChildNode)) {
         return FALSE;
     }
@@ -147,85 +137,75 @@ static boolean validateChildNode(Node_T oParentNode, size_t childIndex) {
 }
 
 /* 
- * checks if a given node satisfies all required rules.
- * makes sure the node is not null and validates the parent-child 
- * path relationship.
+ * this function checks if a given node (oNNode) satisfies all required rules.
+ * it ensures the node is not NULL and validates the parent-child path relationship.
+ * returns TRUE if the node passes all validation checks, FALSE otherwise.
  */
 boolean CheckerDT_Node_isValid(Node_T oNNode) {
     Node_T oParentNode;
     Path_T oCurrentPath;
     Path_T oParentPath;
 
-    /* confirm the node is non-null to proceed with checks */
     if (oNNode == NULL) {
         fprintf(stderr, "validation error: node is null, so it fails validation.\n");
         return FALSE;
     }
 
-    /* retrieve the node’s parent and check their path relationship */
     oParentNode = Node_getParent(oNNode);
     if (oParentNode != NULL) {
         oCurrentPath = Node_getPath(oNNode);
         oParentPath = Node_getPath(oParentNode);
 
-        /* confirm the parent path is the immediate prefix of node path */
         if (Path_getSharedPrefixDepth(oCurrentPath, oParentPath) !=
             Path_getDepth(oCurrentPath) - 1) {
             fprintf(stderr, "validation error: expected parent path (%s) to prefix node path (%s),"
-                            " but this isn’t the case.\n",
+                            " but this isn't the case.\n",
                     Path_getPathname(oParentPath), Path_getPathname(oCurrentPath));
             return FALSE;
         }
     }
 
-    /* if all checks pass, the node is valid */
     return TRUE;
 }
 
 /* 
- * traverses the tree recursively starting at oNNode.
- * returns FALSE immediately if it finds a violation.
+ * this function recursively traverses the tree starting at oNNode.
+ * it returns FALSE immediately if it finds a violation.
  * increments ulVerifiedNodeCount for each valid node.
+ * returns TRUE if all nodes in the subtree rooted at oNNode pass validation, FALSE otherwise.
  */
 static boolean CheckerDT_treeCheck(Node_T oNNode) {
     size_t childIndex;
 
     if (oNNode != NULL) {
-
-        /* confirm the current node is valid */
         if (!CheckerDT_Node_isValid(oNNode)) {
             return FALSE;
         }
 
-        /* count this valid node */
         ulVerifiedNodeCount++;
 
-        /* go through each child node */
         for (childIndex = 0; childIndex < Node_getNumChildren(oNNode); childIndex++) {
-            /* check the current child node and its subtree */
-            if (!validateChildNode(oNNode, childIndex)) {
+            if (!CheckerDT_validateChildNode(oNNode, childIndex)) {
                 return FALSE;
             }
         }
     }
 
-    /* all checks passed for this branch */
     return TRUE;
 }
 
 /* 
- * checks the overall validity of the File Tree (DT).
- * makes sure top-level invariants are met, performs a full
- * recursive validation, and checks that reported node count 
- * matches the actual count.
+ * this function checks the overall validity of the File Tree (DT).
+ * it ensures top-level invariants are met, performs a full recursive validation,
+ * and checks that reported node count (ulCount) matches the actual count.
+ * it takes the initialization status (bIsInitialized), the root node (oNRoot), and the reported node count (ulCount).
+ * returns TRUE if the tree passes all checks, FALSE otherwise.
  */
 boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot,
                           size_t ulCount) {
 
-    /* reset node count tracker before traversal */
     ulVerifiedNodeCount = 0;
 
-    /* top-level check: if uninitialized, node count should be zero */
     if (!bIsInitialized) {
         if (ulCount != 0) {
             fprintf(stderr, "validation error: tree is not initialized, but node count is %lu."
@@ -234,19 +214,16 @@ boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot,
         }
     }
 
-    /* start recursive traversal and validation */
     if (!CheckerDT_treeCheck(oNRoot)) {
         return FALSE;
     }
 
-    /* confirm counted nodes match the given node count */
     if (ulVerifiedNodeCount != ulCount) {
-        fprintf(stderr, "validation error: actual node count (%lu) doesn’t match expected count (%lu)."
+        fprintf(stderr, "validation error: actual node count (%lu) doesn't match expected count (%lu)."
                         " inconsistency detected in node count.\n",
                 (unsigned long)ulVerifiedNodeCount, (unsigned long)ulCount);
         return FALSE;
     }
 
-    /* everything passed, so tree is valid */
     return TRUE;
 }
