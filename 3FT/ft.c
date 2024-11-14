@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* ft.c                                                               */
-/* Author: [Your Name]                                                */
+/* Author: anish                                              */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
@@ -10,7 +10,7 @@
 #include "path.h"
 #include "dynarray.h"
 #include "a4def.h"
-#include "nodeFT.h"   /* Include nodeFT.h to get declarations of Node_* functions */
+#include "nodeFT.h" 
 
 /* state variables for the file tree */
 static boolean isInitialized = FALSE;
