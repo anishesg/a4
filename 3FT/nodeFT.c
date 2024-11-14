@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
-/* nodeFT.c                                                             */
-/* Author: anish                                              */
+/* nodeFT.c                                                           */
+/* Author: anish                                                      */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
@@ -14,12 +14,12 @@
 
 /* Structure representing a node in the File Tree */
 struct node {
-    Path_T path;
-    Node_T parent;
-    DynArray_T children;
+    Path_T oPPath;
+    Node_T oNParent;
+    DynArray_T oDChildren;
     nodeType type;
-    void *contents;
-    size_t size;
+    void *pvContents;
+    size_t ulSize;
 };
 
 /* Helper function to compare nodes based on their paths */
@@ -27,208 +27,257 @@ static int Node_compare(const void *first, const void *second) {
     Node_T node1 = *(Node_T *)first;
     Node_T node2 = *(Node_T *)second;
 
-    return Path_comparePath(node1->path, node2->path);
+    return Path_comparePath(node1->oPPath, node2->oPPath);
 }
 
-/* Helper function to find the insertion index for a child node */
-static size_t Node_findChildIndex(Node_T parent, Path_T childPath) {
-    size_t numChildren = DynArray_getLength(parent->children);
-    size_t index;
+/* Helper function to compare node paths with a string */
+static int Node_compareString(const Node_T oNFirst, const char *pcSecond) {
+    assert(oNFirst != NULL);
+    assert(pcSecond != NULL);
 
-    for (index = 0; index < numChildren; index++) {
-        Node_T child = DynArray_get(parent->children, index);
-        if (Path_comparePath(child->path, childPath) >= 0) {
-            break;
-        }
-    }
-
-    return index;
+    return Path_compareString(oNFirst->oPPath, pcSecond);
 }
 
 /* Function to create a new node */
-int Node_create(Path_T path, nodeType type, Node_T parent, Node_T *resultNode) {
-    Node_T newNode = NULL;
-    int status;
+int Node_new(Path_T oPPath, nodeType type, Node_T oNParent, Node_T *poNResult) {
+    struct node *psNew;
+    Path_T oPParentPath = NULL;
+    Path_T oPNewPath = NULL;
+    int iStatus;
+    size_t ulIndex = 0;
 
-    assert(path != NULL);
-    assert(resultNode != NULL);
+    assert(oPPath != NULL);
+    assert(poNResult != NULL);
 
-    newNode = malloc(sizeof(struct node));
-    if (newNode == NULL) {
-        *resultNode = NULL;
+    /* allocate space for a new node */
+    psNew = calloc(1, sizeof(struct node));
+    if(psNew == NULL) {
+        *poNResult = NULL;
+        return MEMORY_ERROR;
+    }
+    psNew->pvContents = NULL;
+    psNew->type = type; /* set the node's type */
+
+    /* set the new node's path */
+    iStatus = Path_dup(oPPath, &oPNewPath);
+    if(iStatus != SUCCESS) {
+        free(psNew);
+        *poNResult = NULL;
+        return iStatus;
+    }
+    psNew->oPPath = oPNewPath;
+
+    /* validate and set the new node's parent */
+    if(oNParent != NULL) {
+        size_t ulSharedDepth;
+        size_t ulParentDepth;
+
+        oPParentPath = oNParent->oPPath;
+        ulParentDepth = Path_getDepth(oPParentPath);
+        ulSharedDepth = Path_getSharedPrefixDepth(psNew->oPPath, oPParentPath);
+
+        /* parent must be a directory */
+        if (oNParent->type == IS_FILE){
+            Path_free(psNew->oPPath);
+            free(psNew);
+            *poNResult = NULL;
+            return NOT_A_DIRECTORY;
+        }
+
+        /* parent must be an ancestor of child */
+        if(ulSharedDepth < ulParentDepth) {
+            Path_free(psNew->oPPath);
+            free(psNew);
+            *poNResult = NULL;
+            return CONFLICTING_PATH;
+        }
+
+        /* parent must be exactly one level up from child */
+        if(Path_getDepth(psNew->oPPath) != ulParentDepth + 1) {
+            Path_free(psNew->oPPath);
+            free(psNew);
+            *poNResult = NULL;
+            return NO_SUCH_PATH;
+        }
+
+        /* parent must not already have child with this path */
+        if(Node_hasChild(oNParent, oPPath, &ulIndex)) {
+            Path_free(psNew->oPPath);
+            free(psNew);
+            *poNResult = NULL;
+            return ALREADY_IN_TREE;
+        }
+    }
+    else {
+        /* new node must be root and therefore must be directory*/
+        /* can only create one "level" at a time */
+
+        if(Path_getDepth(psNew->oPPath) != 1) {
+            Path_free(psNew->oPPath);
+            free(psNew);
+            *poNResult = NULL;
+            return NO_SUCH_PATH;
+        }
+    }
+    psNew->oNParent = oNParent;
+
+    /* initialize the new node */
+    psNew->oDChildren = DynArray_new(0);
+    if(psNew->oDChildren == NULL) {
+        Path_free(psNew->oPPath);
+        free(psNew);
+        *poNResult = NULL;
         return MEMORY_ERROR;
     }
 
-    status = Path_dup(path, &newNode->path);
-    if (status != SUCCESS) {
-        free(newNode);
-        *resultNode = NULL;
-        return status;
-    }
-
-    newNode->type = type;
-    newNode->parent = parent;
-    newNode->contents = NULL;
-    newNode->size = 0;
-    newNode->children = DynArray_new(0);
-    if (newNode->children == NULL) {
-        Path_free(newNode->path);
-        free(newNode);
-        *resultNode = NULL;
-        return MEMORY_ERROR;
-    }
-
-    if (parent != NULL) {
-        size_t index = Node_findChildIndex(parent, path);
-        if (DynArray_addAt(parent->children, index, newNode) == FALSE) {
-            Path_free(newNode->path);
-            DynArray_free(newNode->children);
-            free(newNode);
-            *resultNode = NULL;
+    /* Link into parent's children list */
+    if(oNParent != NULL) {
+        /* insert into parent's children array in sorted order */
+        if(DynArray_addAt(oNParent->oDChildren, ulIndex, psNew) == FALSE) {
+            Path_free(psNew->oPPath);
+            DynArray_free(psNew->oDChildren);
+            free(psNew);
+            *poNResult = NULL;
             return MEMORY_ERROR;
         }
     }
 
-    *resultNode = newNode;
+    *poNResult = psNew;
+
     return SUCCESS;
 }
 
 /* Function to destroy a node and its descendants */
-size_t Node_destroy(Node_T node) {
-    size_t count = 0;
-    size_t numChildren;
-    size_t i;
+size_t Node_free(Node_T oNNode) {
+    size_t ulIndex = 0;
+    size_t ulCount = 0;
 
-    assert(node != NULL);
+    assert(oNNode != NULL);
 
-    if (node->parent != NULL) {
-        size_t index;
-        for (index = 0; index < DynArray_getLength(node->parent->children); index++) {
-            if (DynArray_get(node->parent->children, index) == node) {
-                DynArray_removeAt(node->parent->children, index);
-                break;
-            }
-        }
+    /* remove from parent's list */
+    if(oNNode->oNParent != NULL) {
+        if(DynArray_bsearch(
+                oNNode->oNParent->oDChildren,
+                oNNode, &ulIndex,
+                (int (*)(const void *, const void *)) Node_compare)
+            )
+            (void) DynArray_removeAt(oNNode->oNParent->oDChildren, ulIndex);
     }
 
-    numChildren = DynArray_getLength(node->children);
-    for (i = 0; i < numChildren; i++) {
-        Node_T child = DynArray_get(node->children, i);
-        count += Node_destroy(child);
+    /* recursively remove children */
+    while(DynArray_getLength(oNNode->oDChildren) != 0) {
+        ulCount += Node_free(DynArray_get(oNNode->oDChildren, 0));
     }
+    DynArray_free(oNNode->oDChildren);
 
-    DynArray_free(node->children);
-    Path_free(node->path);
-    free(node);
-    count++;
+    /* remove path */
+    Path_free(oNNode->oPPath);
 
-    return count;
+    /* finally, free the struct node */
+    free(oNNode);
+    ulCount++;
+    return ulCount;
 }
 
 /* Function to get the path of a node */
-Path_T Node_getPath(Node_T node) {
-    assert(node != NULL);
-    return node->path;
+Path_T Node_getPath(Node_T oNNode) {
+    assert(oNNode != NULL);
+    return oNNode->oPPath;
 }
 
 /* Function to get the type of a node */
-nodeType Node_getType(Node_T node) {
-    assert(node != NULL);
-    return node->type;
-}
-
-/* Function to get the contents of a node (file) */
-void *Node_getContents(Node_T node) {
-    assert(node != NULL);
-    if (node->type == IS_FILE) {
-        return node->contents;
-    }
-    return NULL;
+nodeType Node_getType(Node_T oNNode) {
+    assert(oNNode != NULL);
+    return oNNode->type;
 }
 
 /* Function to set the contents of a node (file) */
-int Node_setContents(Node_T node, void *contents, size_t size) {
-    assert(node != NULL);
+int Node_insertFileContents(Node_T oNNode, void *pvContents, size_t ulLength) {
+    assert(oNNode != NULL);
 
-    if (node->type != IS_FILE) {
-        return NOT_A_FILE;
+    if (oNNode->type != IS_FILE) {
+        return BAD_PATH;
     }
 
-    node->contents = contents;
-    node->size = size;
+    oNNode->pvContents = pvContents;
+    oNNode->ulSize = ulLength;
 
     return SUCCESS;
 }
 
-/* Function to get the size of a node's contents */
-size_t Node_getSize(Node_T node) {
-    assert(node != NULL);
+/* Function to get the contents of a node (file) */
+void *Node_getContents(Node_T oNNode) {
+    assert(oNNode != NULL);
+    if (oNNode->type == IS_FILE) {
+        return oNNode->pvContents;
+    }
+    return NULL;
+}
 
-    if (node->type == IS_FILE) {
-        return node->size;
+/* Function to get the size of a node's contents */
+size_t Node_getSize(Node_T oNNode) {
+    assert(oNNode != NULL);
+    if (oNNode->type == IS_FILE) {
+        return oNNode->ulSize;
     }
     return 0;
 }
 
 /* Function to get the number of children of a node */
-int Node_getNumChildren(Node_T node, size_t *numChildren) {
-    assert(node != NULL);
-    assert(numChildren != NULL);
+int Node_getNumChildren(Node_T oNParent, size_t *pulNum) {
+    assert(oNParent != NULL);
+    assert(pulNum != NULL);
 
-    if (node->type != IS_DIRECTORY) {
+    /* verify oNParent is a directory */
+    if (oNParent->type != IS_DIRECTORY){
         return NOT_A_DIRECTORY;
     }
 
-    *numChildren = DynArray_getLength(node->children);
+    *pulNum = DynArray_getLength(oNParent->oDChildren);
     return SUCCESS;
 }
 
 /* Function to get a child node by index */
-int Node_getChild(Node_T node, size_t index, Node_T *childNode) {
-    assert(node != NULL);
-    assert(childNode != NULL);
+int Node_getChild(Node_T oNParent, size_t ulChildID, Node_T *poNResult) {
+    size_t ulNumChildren = 0;
+    int iStatus;
 
-    if (node->type != IS_DIRECTORY) {
-        return NOT_A_DIRECTORY;
+    assert(oNParent != NULL);
+    assert(poNResult != NULL);
+
+    iStatus = Node_getNumChildren(oNParent, &ulNumChildren);
+    if (iStatus != SUCCESS) {
+        return iStatus;
     }
 
-    if (index >= DynArray_getLength(node->children)) {
-        *childNode = NULL;
+    if (ulChildID >= ulNumChildren) {
+        *poNResult = NULL;
         return NO_SUCH_PATH;
     }
 
-    *childNode = DynArray_get(node->children, index);
+    *poNResult = DynArray_get(oNParent->oDChildren, ulChildID);
     return SUCCESS;
 }
 
-/* Function to get the parent of a node */
-Node_T Node_getParent(Node_T node) {
-    assert(node != NULL);
-    return node->parent;
-}
-
 /* Function to check if a node has a child with a given path */
-boolean Node_hasChild(Node_T node, Path_T path, size_t *childIndex) {
-    size_t numChildren;
-    size_t i;
+boolean Node_hasChild(Node_T oNParent, Path_T oPPath, size_t *pulChildID) {
+    assert(oNParent != NULL);
+    assert(oPPath != NULL);
+    assert(pulChildID != NULL);
 
-    assert(node != NULL);
-    assert(path != NULL);
-    assert(childIndex != NULL);
-
-    numChildren = DynArray_getLength(node->children);
-
-    for (i = 0; i < numChildren; i++) {
-        Node_T child = DynArray_get(node->children, i);
-        int cmp = Path_comparePath(Node_getPath(child), path);
-        if (cmp == 0) {
-            *childIndex = i;
-            return TRUE;
-        } else if (cmp > 0) {
-            break;
-        }
+    /* invariant */
+    if (oNParent->type != IS_DIRECTORY){
+        return FALSE;
     }
 
-    *childIndex = i;
-    return FALSE;
+    /* *pulChildID is the index into oNParent->oDChildren */
+    return DynArray_bsearch(oNParent->oDChildren,
+            (char*) Path_getPathname(oPPath), pulChildID,
+            (int (*)(const void*,const void*)) Node_compareString);
+}
+
+/* Function to get the parent of a node */
+Node_T Node_getParent(Node_T oNNode) {
+    assert(oNNode != NULL);
+    return oNNode->oNParent;
 }

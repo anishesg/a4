@@ -10,7 +10,7 @@
 #include "path.h"
 #include "dynarray.h"
 #include "a4def.h"
-#include "nodeFT.h"
+#include "nodeFT.h"   /* Include nodeFT.h to get declarations of Node_* functions */
 
 /* state variables for the file tree */
 static boolean isInitialized = FALSE;
@@ -104,22 +104,25 @@ static int FT_findNode(const char *pathStr, Node_T *node) {
     }
 
     status = FT_traversePath(path, &foundNode);
-    Path_free(path);
     if (status != SUCCESS) {
+        Path_free(path);
         *node = NULL;
         return status;
     }
 
     if (foundNode == NULL) {
+        Path_free(path);
         *node = NULL;
         return NO_SUCH_PATH;
     }
 
     if (Path_comparePath(Node_getPath(foundNode), path) != 0) {
+        Path_free(path);
         *node = NULL;
         return NO_SUCH_PATH;
     }
 
+    Path_free(path);
     *node = foundNode;
     return SUCCESS;
 }
@@ -179,7 +182,7 @@ int FT_insertDir(const char *pcPath) {
             return status;
         }
 
-        status = Node_create(prefix, IS_DIRECTORY, currentNode, &newNode);
+        status = Node_new(prefix, IS_DIRECTORY, currentNode, &newNode);
         Path_free(prefix);
         if (status != SUCCESS) {
             Path_free(path);
@@ -242,7 +245,7 @@ int FT_rmDir(const char *pcPath) {
         return NOT_A_DIRECTORY;
     }
 
-    nodeCount -= Node_free(node);
+    nodeCount -= Node_free(node);  /* Use Node_free */
     if (nodeCount == 0) {
         root = NULL;
     }
@@ -312,9 +315,9 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
         }
 
         if (level == depth) {
-            status = Node_create(prefix, IS_FILE, currentNode, &newNode);
+            status = Node_new(prefix, IS_FILE, currentNode, &newNode);
         } else {
-            status = Node_create(prefix, IS_DIRECTORY, currentNode, &newNode);
+            status = Node_new(prefix, IS_DIRECTORY, currentNode, &newNode);
         }
         Path_free(prefix);
         if (status != SUCCESS) {
@@ -326,7 +329,7 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
         }
 
         if (level == depth) {
-            status = Node_setContents(newNode, pvContents, ulLength);
+            status = Node_insertFileContents(newNode, pvContents, ulLength);
             if (status != SUCCESS) {
                 Path_free(path);
                 if (firstNewNode != NULL) {
@@ -385,7 +388,7 @@ int FT_rmFile(const char *pcPath) {
         return NOT_A_FILE;
     }
 
-    nodeCount -= Node_free(node);
+    nodeCount -= Node_free(node);  /* Use Node_free */
     if (nodeCount == 0) {
         root = NULL;
     }
@@ -422,7 +425,7 @@ void *FT_replaceFileContents(const char *pcPath, void *pvNewContents, size_t ulN
     }
 
     oldContents = Node_getContents(node);
-    status = Node_setContents(node, pvNewContents, ulNewLength);
+    status = Node_insertFileContents(node, pvNewContents, ulNewLength);
     if (status != SUCCESS) {
         return NULL;
     }
@@ -474,7 +477,7 @@ int FT_destroy(void) {
     }
 
     if (root != NULL) {
-        nodeCount -= Node_free(root);
+        nodeCount -= Node_free(root);  /* Use Node_free */
         root = NULL;
     }
 
@@ -496,9 +499,17 @@ static void FT_preOrderTraversal(Node_T node, DynArray_T array, size_t *index) {
 
     if (Node_getType(node) == IS_DIRECTORY) {
         if (Node_getNumChildren(node, &numChildren) == SUCCESS) {
+            /* First, add file children */
             for (i = 0; i < numChildren; i++) {
                 Node_T childNode = NULL;
-                if (Node_getChild(node, i, &childNode) == SUCCESS) {
+                if (Node_getChild(node, i, &childNode) == SUCCESS && Node_getType(childNode) == IS_FILE) {
+                    FT_preOrderTraversal(childNode, array, index);
+                }
+            }
+            /* Then, add directory children */
+            for (i = 0; i < numChildren; i++) {
+                Node_T childNode = NULL;
+                if (Node_getChild(node, i, &childNode) == SUCCESS && Node_getType(childNode) == IS_DIRECTORY) {
                     FT_preOrderTraversal(childNode, array, index);
                 }
             }
