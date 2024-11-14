@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* checkerDT.c                                                        */
-/* Author:   anish                                                          */
+/* Author: anish                                                      */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
@@ -9,6 +9,9 @@
 #include "checkerDT.h"
 #include "dynarray.h"
 #include "path.h"
+
+/* static variable to keep track of the actual node count during traversal */
+static size_t ulCheck = 0;
 
 /* see checkerDT.h for specification */
 boolean CheckerDT_Node_isValid(Node_T oNNode) {
@@ -44,9 +47,15 @@ boolean CheckerDT_Node_isValid(Node_T oNNode) {
 /*
    performs a pre-order traversal starting from oNNode.
    returns FALSE if any inconsistency is detected, TRUE otherwise.
+   increments ulCheck for each valid node encountered.
 */
 static boolean CheckerDT_treeCheck(Node_T oNNode) {
     size_t index;
+    size_t compareIdx;
+    Node_T oChild = NULL;
+    Node_T oCompareChild = NULL;
+    Node_T oPrevChild = NULL;
+    int status;
 
     if (oNNode != NULL) {
 
@@ -55,11 +64,11 @@ static boolean CheckerDT_treeCheck(Node_T oNNode) {
             return FALSE;
         }
 
+        /* increment the node count */
+        ulCheck++;
+
         /* iterate through each child of the current node */
         for (index = 0; index < Node_getNumChildren(oNNode); index++) {
-            Node_T oChild = NULL;
-            int status;
-
             /* retrieve the child node at the current index */
             status = Node_getChild(oNNode, index, &oChild);
             if (status != SUCCESS) {
@@ -74,22 +83,29 @@ static boolean CheckerDT_treeCheck(Node_T oNNode) {
             }
 
             /* check for duplicate children */
-            {
-                size_t compareIdx;
-                for (compareIdx = 0; compareIdx < index; compareIdx++) {
-                    Node_T oCompareChild = NULL;
-                    Node_getChild(oNNode, compareIdx, &oCompareChild);
-                    if (Node_compare(oChild, oCompareChild) == 0) {
-                        fprintf(stderr, "error: duplicate child node found at index %lu\n", index);
-                        return FALSE;
-                    }
+            for (compareIdx = 0; compareIdx < index; compareIdx++) {
+                /* retrieve the child node at compareIdx */
+                status = Node_getChild(oNNode, compareIdx, &oCompareChild);
+                if (status != SUCCESS) {
+                    fprintf(stderr, "error: getChild failed for compare index %lu\n", compareIdx);
+                    return FALSE;
+                }
+
+                if (Node_compare(oChild, oCompareChild) == 0) {
+                    fprintf(stderr, "error: duplicate child node found at index %lu\n", index);
+                    return FALSE;
                 }
             }
 
             /* verify lexicographical order of children */
             if (index > 0) {
-                Node_T oPrevChild = NULL;
-                Node_getChild(oNNode, index - 1, &oPrevChild);
+                /* retrieve the previous child node */
+                status = Node_getChild(oNNode, index - 1, &oPrevChild);
+                if (status != SUCCESS) {
+                    fprintf(stderr, "error: getChild failed for previous index %lu\n", index - 1);
+                    return FALSE;
+                }
+
                 if (strcmp(Path_getPathname(Node_getPath(oPrevChild)),
                            Path_getPathname(Node_getPath(oChild))) > 0) {
                     fprintf(stderr, "error: children are not in lexicographic order at index %lu\n", index);
@@ -112,6 +128,9 @@ static boolean CheckerDT_treeCheck(Node_T oNNode) {
 boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot,
                           size_t ulCount) {
 
+    /* reset the node count before starting traversal */
+    ulCheck = 0;
+
     /* verify top-level invariants */
     if (!bIsInitialized) {
         if (ulCount != 0) {
@@ -120,12 +139,16 @@ boolean CheckerDT_isValid(boolean bIsInitialized, Node_T oNRoot,
         }
     }
 
-    /* perform recursive validation starting from the root */
+    /* perform recursive validation and count nodes */
     if (!CheckerDT_treeCheck(oNRoot)) {
         return FALSE;
     }
 
-    /* additional consistency checks can be implemented here if needed */
+    /* verify that the counted nodes match the reported count */
+    if (ulCheck != ulCount) {
+        fprintf(stderr, "error: mismatch in node count (counted: %lu, reported: %lu)\n", ulCheck, ulCount);
+        return FALSE;
+    }
 
     /* all validations passed */
     return TRUE;
