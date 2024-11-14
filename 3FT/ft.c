@@ -7,7 +7,7 @@
 
 #include "path.h"
 #include "ft.h"
-#include "node.h"
+#include "nodeFT.h"
 #include "dynarray.h"
 
 /* 1. a flag for being in an initialized state (TRUE) or not (FALSE) */
