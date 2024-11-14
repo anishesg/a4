@@ -1,7 +1,3 @@
-/*--------------------------------------------------------------------*/
-/* ft.c                                                               */
-/* Author: Derek Geng, Emily Luo                                      */
-/*--------------------------------------------------------------------*/
 
 #include <stddef.h>
 #include <assert.h>
@@ -13,7 +9,7 @@
 #include "path.h"
 #include "nodeFT.h"
 #include "ft.h"
-#include "checkerFT.h"
+
 
 /*
   A File Tree is a representation of a hierarchy of directories or 
