@@ -6,14 +6,14 @@
 #ifndef FT_INCLUDED
 #define FT_INCLUDED
 
+#include <stddef.h>
+#include "a4def.h"
+
 /*
   A File Tree is a representation of a hierarchy of directories and
   files: the File Tree is rooted at a directory, directories
   may be internal nodes or leaves, and files are always leaves.
 */
-
-#include <stddef.h>
-#include "a4def.h"
 
 /* Function declarations */
 

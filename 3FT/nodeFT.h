@@ -17,6 +17,8 @@
 */
 typedef struct node *Node_T;
 
+/* Function declarations */
+
 /*
   Constructs a new node with the specified path `path`, parent `parent`,
   and type determined by `isFile` (TRUE for files, FALSE for directories).
@@ -141,7 +143,7 @@ int NodeFT_getContents(Node_T node, void **contentsPtr);
 int NodeFT_getContentLength(Node_T node, size_t *lengthPtr);
 
 /*
-  Sets the contents of file node `node` to `newContents` of length `newLength`.
+  Sets the contents of file node `node` to `newContents` of length `newLength` bytes.
 
   Parameters:
     - node: the file node whose contents are to be set
@@ -193,4 +195,4 @@ Node_T NodeFT_getParent(Node_T node);
 */
 char *NodeFT_toString(Node_T node);
 
-#endif
+#endif /* NODEFT_INCLUDED */
