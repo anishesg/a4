@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* ft.c                                                               */
-/* Author: anish                                                   */
+/* Author: anish                                                     */
 /*--------------------------------------------------------------------*/
 
 #include <stddef.h>
@@ -205,11 +205,11 @@ int FT_insertDir(const char *pcPath) {
     int iStatus;
     Path_T oPPath = NULL;
     Node_T currentNode = NULL;
-    Node_T newNode = NULL;
     Node_T firstNewNode = NULL;
     size_t pathDepth, currDepth;
     size_t newNodesCount = 0;
     boolean isFile = FALSE;
+    size_t i; /* Loop variable */
 
     assert(pcPath != NULL);
     assert(CheckerFT_isValid(isInitialized, root, nodeCount));
@@ -253,7 +253,7 @@ int FT_insertDir(const char *pcPath) {
     }
 
     /* Build the path from currentNode towards oPPath */
-    for (size_t i = currDepth + 1; i <= pathDepth; i++) {
+    for (i = currDepth + 1; i <= pathDepth; i++) {
         Path_T prefixPath = NULL;
         Node_T newChild = NULL;
 
@@ -332,11 +332,11 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
     int iStatus;
     Path_T oPPath = NULL;
     Node_T currentNode = NULL;
-    Node_T newNode = NULL;
     Node_T firstNewNode = NULL;
     size_t pathDepth, currDepth;
     size_t newNodesCount = 0;
     boolean isFile = FALSE;
+    size_t i; /* Loop variable */
 
     assert(pcPath != NULL);
     assert(CheckerFT_isValid(isInitialized, root, nodeCount));
@@ -380,7 +380,7 @@ int FT_insertFile(const char *pcPath, void *pvContents, size_t ulLength) {
     }
 
     /* Build the path from currentNode towards oPPath */
-    for (size_t i = currDepth + 1; i <= pathDepth; i++) {
+    for (i = currDepth + 1; i <= pathDepth; i++) {
         Path_T prefixPath = NULL;
         Node_T newChild = NULL;
         boolean createFileNode = (i == pathDepth);
@@ -601,6 +601,7 @@ char *FT_toString(void) {
     DynArray_T nodeArray;
     size_t totalStrLen = 1; /* Start with 1 for null terminator */
     char *resultStr = NULL;
+    size_t i;
 
     if (!isInitialized)
         return NULL;
@@ -612,7 +613,7 @@ char *FT_toString(void) {
     FT_preOrderTraversal(root, nodeArray, 0);
 
     /* Calculate total string length */
-    for (size_t i = 0; i < DynArray_getLength(nodeArray); i++) {
+    for (i = 0; i < DynArray_getLength(nodeArray); i++) {
         Node_T node = DynArray_get(nodeArray, i);
         char *nodeStr = NodeFT_toString(node);
         if (nodeStr != NULL) {
@@ -629,7 +630,7 @@ char *FT_toString(void) {
     *resultStr = '\0';
 
     /* Concatenate node strings */
-    for (size_t i = 0; i < DynArray_getLength(nodeArray); i++) {
+    for (i = 0; i < DynArray_getLength(nodeArray); i++) {
         Node_T node = DynArray_get(nodeArray, i);
         char *nodeStr = NodeFT_toString(node);
         if (nodeStr != NULL) {
