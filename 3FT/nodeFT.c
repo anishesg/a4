@@ -33,6 +33,31 @@ struct node {
 /*---------------------------------------------------------------*/
 
 /*
+  Comparison function used for sorting and searching nodes in child arrays.
+  Compares the paths of two nodes.
+*/
+static int NodeFT_compareNodes(const Node_T firstNode, const Node_T secondNode) {
+    assert(firstNode != NULL);
+    assert(secondNode != NULL);
+
+    return Path_comparePath(firstNode->path, secondNode->path);
+}
+
+/*
+  Comparison function used for searching in the child arrays.
+  Compares the paths of a node and a string.
+*/
+static int NodeFT_comparePathString(const void *nodePtr, const void *pathStrPtr) {
+    const Node_T node = (const Node_T)nodePtr;
+    const char *pathStr = (const char *)pathStrPtr;
+
+    assert(node != NULL);
+    assert(pathStr != NULL);
+
+    return Path_compareString(node->path, pathStr);
+}
+
+/*
   Helper function to initialize a new node.
   Allocates memory, duplicates the path, and sets initial values.
 */
@@ -168,35 +193,11 @@ static void NodeFT_removeFromParent(Node_T oNNode) {
             childArray = oNNode->parent->dirChildren;
 
         /* Find and remove the node from the array */
-        found = DynArray_bsearch(childArray, oNNode, &childIndex, (int (*)(const void *, const void *))NodeFT_compareNodes);
+        found = DynArray_bsearch(childArray, oNNode, &childIndex,
+            (int (*)(const void *, const void *))NodeFT_compareNodes);
         if (found)
             DynArray_removeAt(childArray, childIndex);
     }
-}
-
-/*
-  Comparison function used for searching in the child arrays.
-  Compares the paths of a node and a string.
-*/
-static int NodeFT_comparePathString(const void *nodePtr, const void *pathStrPtr) {
-    const Node_T node = (const Node_T)nodePtr;
-    const char *pathStr = (const char *)pathStrPtr;
-
-    assert(node != NULL);
-    assert(pathStr != NULL);
-
-    return Path_compareString(node->path, pathStr);
-}
-
-/*
-  Comparison function used for sorting and searching nodes in child arrays.
-  Compares the paths of two nodes.
-*/
-static int NodeFT_compareNodes(const Node_T firstNode, const Node_T secondNode) {
-    assert(firstNode != NULL);
-    assert(secondNode != NULL);
-
-    return Path_comparePath(firstNode->path, secondNode->path);
 }
 
 /*---------------------------------------------------------------*/
@@ -425,7 +426,7 @@ Node_T NodeFT_getParent(Node_T oNNode) {
 
 /* See nodeFT.h for specification */
 char *NodeFT_toString(Node_T oNNode) {
-    char *pathStr = NULL;
+    const char *pathStr = NULL;
     const char *typePrefix = NULL;
     char *resultStr = NULL;
     size_t totalLength;
@@ -447,7 +448,7 @@ char *NodeFT_toString(Node_T oNNode) {
     totalLength = strlen(typePrefix) + strlen(pathStr) + 1;
     resultStr = (char *)malloc(totalLength);
     if (resultStr == NULL) {
-        free(pathStr);
+        /* No need to free pathStr as it's managed elsewhere */
         return NULL;
     }
 
@@ -455,6 +456,7 @@ char *NodeFT_toString(Node_T oNNode) {
     strcpy(resultStr, typePrefix);
     strcat(resultStr, pathStr);
 
-    free(pathStr);
+    /* No need to free pathStr as it's managed elsewhere */
+
     return resultStr;
 }
