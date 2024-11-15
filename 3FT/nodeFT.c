@@ -336,7 +336,7 @@ static void NodeFT_removeFromParent(Node_T node) {
         /* Find and remove the node from the array */
         found = DynArray_bsearch(childArray, node, &childIndex, NodeFT_compareNodes);
         if (found)
-            (void)DynArray_removeAt(childArray, childIndex); /* cast to void to ignore return value */
+            DynArray_removeAt(childArray, childIndex);
     }
 }
 
