@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* checkerFT.c                                                        */
-/* Author: anish                                                      */
+/* Author: [Your Name]                                                */
 /*--------------------------------------------------------------------*/
 
 #include <assert.h>
@@ -237,4 +237,5 @@ boolean CheckerFT_isValid(boolean isInitialized, Node_T root, size_t count) {
     }
 
     DynArray_free(seenNodes);
-    return result
+    return result;
+}
