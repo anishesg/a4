@@ -36,15 +36,15 @@ struct node {
   Compares the paths of two nodes for sorting and searching.
 
   Parameters:
-    - node1: the first node to compare
-    - node2: the second node to compare
+    - node1: pointer to the first node
+    - node2: pointer to the second node
 
   Returns:
     - A negative value if node1 < node2
     - Zero if node1 == node2
     - A positive value if node1 > node2
 */
-static int NodeFT_compareNodes(const Node_T node1, const Node_T node2);
+static int NodeFT_compareNodes(const void *node1, const void *node2);
 
 /*
   Compares the path of a node and a string for searching.
@@ -129,19 +129,22 @@ static void NodeFT_removeFromParent(Node_T node);
   Compares the paths of two nodes for sorting and searching.
 
   Parameters:
-    - node1: the first node to compare
-    - node2: the second node to compare
+    - node1: pointer to the first node
+    - node2: pointer to the second node
 
   Returns:
     - A negative value if node1 < node2
     - Zero if node1 == node2
     - A positive value if node1 > node2
 */
-static int NodeFT_compareNodes(const Node_T node1, const Node_T node2) {
-    assert(node1 != NULL);
-    assert(node2 != NULL);
+static int NodeFT_compareNodes(const void *node1, const void *node2) {
+    const Node_T n1 = (const Node_T)node1;
+    const Node_T n2 = (const Node_T)node2;
 
-    return Path_comparePath(node1->path, node2->path);
+    assert(n1 != NULL);
+    assert(n2 != NULL);
+
+    return Path_comparePath(n1->path, n2->path);
 }
 
 /*
@@ -336,7 +339,7 @@ static void NodeFT_removeFromParent(Node_T node) {
         /* Find and remove the node from the array */
         found = DynArray_bsearch(childArray, node, &childIndex, NodeFT_compareNodes);
         if (found)
-            DynArray_removeAt(childArray, childIndex);
+            (void)DynArray_removeAt(childArray, childIndex); /* Explicitly ignore return value */
     }
 }
 
@@ -540,7 +543,7 @@ size_t NodeFT_getNumChildren(Node_T parent, boolean isFile) {
 
   Returns:
     - SUCCESS on successful retrieval
-    - NO_SUCH_PATH if childID is out of bounds
+    - NO_SUCH_PATH if `childID` is out of bounds
 
   On success, sets `*resultNode` to the retrieved child node.
   On failure, sets `*resultNode` to NULL.
