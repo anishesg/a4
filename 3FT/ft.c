@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
 #include "dynarray.h"
 #include "path.h"
 #include "nodeFT.h"
@@ -61,7 +62,8 @@ static int FT_traversePath(Path_T oPPath, Node_T *poNFurthest, boolean *pbIsFile
         return iStatus;
     }
 
-    if (!Path_comparePath(NodeFT_getPath(root), oPPrefix)) {
+    /* Corrected condition */
+    if (Path_comparePath(NodeFT_getPath(root), oPPrefix) != 0) {
         Path_free(oPPrefix);
         *poNFurthest = NULL;
         return CONFLICTING_PATH;
