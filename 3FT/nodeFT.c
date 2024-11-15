@@ -12,40 +12,40 @@
 
 /* Definition of the Node_T structure */
 struct node {
-    /* The path associated with this node */
+    /* the path associated with this node */
     Path_T path;
-    /* Pointer to the parent node */
+    /* pointer to the parent node */
     Node_T parent;
-    /* Indicator of whether this node represents a file (TRUE) or directory (FALSE) */
+    /* TRUE if this node is a file, FALSE if a directory */
     boolean isFile;
-    /* Dynamic array of directory children */
+    /* dynamic array of directory children */
     DynArray_T dirChildren;
-    /* Dynamic array of file children */
+    /* dynamic array of file children */
     DynArray_T fileChildren;
-    /* Contents of the file (only valid if isFile is TRUE) */
+    /* contents of the file (only valid if isFile is TRUE) */
     void *contents;
-    /* Length of the contents (only valid if isFile is TRUE) */
+    /* length of the contents (only valid if isFile is TRUE) */
     size_t contentLength;
 };
 
 /*---------------------------------------------------------------*/
-/* Static Helper Functions                                       */
+/* static helper functions                                       */
 /*---------------------------------------------------------------*/
 
 /*
-  Comparison function used for sorting and searching nodes in child arrays.
-  Compares the paths of two nodes.
+  compares the paths of two nodes for sorting and searching.
+  returns negative, zero, or positive depending on comparison.
 */
-static int NodeFT_compareNodes(const Node_T firstNode, const Node_T secondNode) {
-    assert(firstNode != NULL);
-    assert(secondNode != NULL);
+static int NodeFT_compareNodes(const Node_T node1, const Node_T node2) {
+    assert(node1 != NULL);
+    assert(node2 != NULL);
 
-    return Path_comparePath(firstNode->path, secondNode->path);
+    return Path_comparePath(node1->path, node2->path);
 }
 
 /*
-  Comparison function used for searching in the child arrays.
-  Compares the paths of a node and a string.
+  compares the path of a node and a string for searching.
+  returns negative, zero, or positive depending on comparison.
 */
 static int NodeFT_comparePathString(const void *nodePtr, const void *pathStrPtr) {
     const Node_T node = (const Node_T)nodePtr;
@@ -58,45 +58,47 @@ static int NodeFT_comparePathString(const void *nodePtr, const void *pathStrPtr)
 }
 
 /*
-  Helper function to initialize a new node.
-  Allocates memory, duplicates the path, and sets initial values.
+  initializes a new node with given path, parent, and type (file or dir).
+  allocates memory, duplicates path, and sets initial values.
+  on success, sets *resultNode to the new node and returns SUCCESS.
+  on failure, sets *resultNode to NULL and returns appropriate error code.
 */
-static int NodeFT_initializeNode(Path_T oPPath, Node_T oNParent, boolean bIsFile, Node_T *poNResult) {
+static int NodeFT_initializeNode(Path_T path, Node_T parent, boolean isFile, Node_T *resultNode) {
     Node_T newNode = NULL;
     Path_T pathCopy = NULL;
     int status;
 
-    assert(oPPath != NULL);
-    assert(poNResult != NULL);
+    assert(path != NULL);
+    assert(resultNode != NULL);
 
-    /* Allocate memory for the new node */
+    /* allocate memory for the new node */
     newNode = (Node_T)malloc(sizeof(struct node));
     if (newNode == NULL) {
-        *poNResult = NULL;
+        *resultNode = NULL;
         return MEMORY_ERROR;
     }
 
-    /* Duplicate the path */
-    status = Path_dup(oPPath, &pathCopy);
+    /* duplicate the path */
+    status = Path_dup(path, &pathCopy);
     if (status != SUCCESS) {
         free(newNode);
-        *poNResult = NULL;
+        *resultNode = NULL;
         return status;
     }
 
-    /* Initialize the new node's fields */
+    /* initialize the new node's fields */
     newNode->path = pathCopy;
-    newNode->parent = oNParent;
-    newNode->isFile = bIsFile;
+    newNode->parent = parent;
+    newNode->isFile = isFile;
     newNode->contents = NULL;
     newNode->contentLength = 0;
 
-    if (bIsFile) {
-        /* Files do not have children */
+    if (isFile) {
+        /* files don't have children */
         newNode->dirChildren = NULL;
         newNode->fileChildren = NULL;
     } else {
-        /* Directories have separate arrays for dir and file children */
+        /* directories have separate arrays for dir and file children */
         newNode->dirChildren = DynArray_new(0);
         newNode->fileChildren = DynArray_new(0);
         if (newNode->dirChildren == NULL || newNode->fileChildren == NULL) {
@@ -106,37 +108,38 @@ static int NodeFT_initializeNode(Path_T oPPath, Node_T oNParent, boolean bIsFile
                 DynArray_free(newNode->fileChildren);
             Path_free(newNode->path);
             free(newNode);
-            *poNResult = NULL;
+            *resultNode = NULL;
             return MEMORY_ERROR;
         }
     }
 
-    *poNResult = newNode;
+    *resultNode = newNode;
     return SUCCESS;
 }
 
 /*
-  Helper function to validate the parent-child relationship.
-  Ensures the new node is directly under the parent and paths are consistent.
+  validates the parent-child relationship.
+  ensures newNode is directly under parent and paths are consistent.
+  returns SUCCESS if valid, appropriate error code otherwise.
 */
-static int NodeFT_validateParentChild(Node_T oNParent, Node_T newNode) {
+static int NodeFT_validateParentChild(Node_T parent, Node_T newNode) {
     size_t parentDepth, sharedDepth;
 
     assert(newNode != NULL);
 
-    if (oNParent == NULL) {
-        /* If there is no parent, this must be the root node */
+    if (parent == NULL) {
+        /* if no parent, must be the root node */
         if (Path_getDepth(newNode->path) != 1)
             return NO_SUCH_PATH;
     } else {
-        parentDepth = Path_getDepth(oNParent->path);
-        sharedDepth = Path_getSharedPrefixDepth(newNode->path, oNParent->path);
+        parentDepth = Path_getDepth(parent->path);
+        sharedDepth = Path_getSharedPrefixDepth(newNode->path, parent->path);
 
-        /* Parent's path must be a prefix of the new node's path */
+        /* parent's path must be a prefix of newNode's path */
         if (sharedDepth < parentDepth)
             return CONFLICTING_PATH;
 
-        /* New node must be directly under the parent */
+        /* newNode must be directly under the parent */
         if (Path_getDepth(newNode->path) != parentDepth + 1)
             return NO_SUCH_PATH;
     }
@@ -145,8 +148,8 @@ static int NodeFT_validateParentChild(Node_T oNParent, Node_T newNode) {
 }
 
 /*
-  Helper function to insert a child node into the appropriate child array.
-  Returns SUCCESS on success, or an appropriate error code on failure.
+  inserts childNode into parentNode's appropriate child array.
+  returns SUCCESS on success, or appropriate error code on failure.
 */
 static int NodeFT_insertChild(Node_T parentNode, Node_T childNode, boolean isFile) {
     size_t childIndex = 0;
@@ -155,19 +158,19 @@ static int NodeFT_insertChild(Node_T parentNode, Node_T childNode, boolean isFil
 
     assert(parentNode != NULL);
     assert(childNode != NULL);
-    assert(!parentNode->isFile); /* Parent must be a directory */
+    assert(!parentNode->isFile); /* parent must be a directory */
 
-    /* Choose the correct child array based on the node type */
+    /* choose the correct child array based on the node type */
     if (isFile)
         childArray = parentNode->fileChildren;
     else
         childArray = parentNode->dirChildren;
 
-    /* Check for duplicate child */
+    /* check for duplicate child */
     if (NodeFT_hasChild(parentNode, childNode->path, &childIndex, isFile))
         return ALREADY_IN_TREE;
 
-    /* Insert the child into the array at the correct position */
+    /* insert the child into the array at the correct position */
     insertStatus = DynArray_addAt(childArray, childIndex, childNode);
     if (insertStatus == TRUE)
         return SUCCESS;
@@ -176,24 +179,24 @@ static int NodeFT_insertChild(Node_T parentNode, Node_T childNode, boolean isFil
 }
 
 /*
-  Helper function to remove a node from its parent's child array.
+  removes node from its parent's child array.
 */
-static void NodeFT_removeFromParent(Node_T oNNode) {
+static void NodeFT_removeFromParent(Node_T node) {
     DynArray_T childArray;
     size_t childIndex = 0;
     int found;
 
-    assert(oNNode != NULL);
+    assert(node != NULL);
 
-    if (oNNode->parent != NULL) {
-        /* Choose the correct child array */
-        if (oNNode->isFile)
-            childArray = oNNode->parent->fileChildren;
+    if (node->parent != NULL) {
+        /* choose the correct child array */
+        if (node->isFile)
+            childArray = node->parent->fileChildren;
         else
-            childArray = oNNode->parent->dirChildren;
+            childArray = node->parent->dirChildren;
 
-        /* Find and remove the node from the array */
-        found = DynArray_bsearch(childArray, oNNode, &childIndex,
+        /* find and remove the node from the array */
+        found = DynArray_bsearch(childArray, node, &childIndex,
             (int (*)(const void *, const void *))NodeFT_compareNodes);
         if (found)
             DynArray_removeAt(childArray, childIndex);
@@ -201,262 +204,298 @@ static void NodeFT_removeFromParent(Node_T oNNode) {
 }
 
 /*---------------------------------------------------------------*/
-/* Public Interface Functions                                    */
+/* public interface functions                                    */
 /*---------------------------------------------------------------*/
 
-/* See nodeFT.h for specification */
-int NodeFT_new(Path_T oPPath, Node_T oNParent, boolean bIsFile, Node_T *poNResult) {
+/*
+  constructs a new node with specified path, parent, and type.
+  on success, stores the new node in *resultNode and returns SUCCESS.
+  on failure, sets *resultNode to NULL and returns appropriate error code.
+*/
+int NodeFT_new(Path_T path, Node_T parent, boolean isFile, Node_T *resultNode) {
     Node_T newNode = NULL;
     int status;
 
-    assert(oPPath != NULL);
-    assert(poNResult != NULL);
+    assert(path != NULL);
+    assert(resultNode != NULL);
 
-    /* Initialize the new node */
-    status = NodeFT_initializeNode(oPPath, oNParent, bIsFile, &newNode);
+    /* initialize the new node */
+    status = NodeFT_initializeNode(path, parent, isFile, &newNode);
     if (status != SUCCESS)
         return status;
 
-    /* Validate the parent-child relationship */
-    status = NodeFT_validateParentChild(oNParent, newNode);
+    /* validate the parent-child relationship */
+    status = NodeFT_validateParentChild(parent, newNode);
     if (status != SUCCESS) {
-        /* Cleanup in case of failure */
-        if (!bIsFile) {
+        /* cleanup in case of failure */
+        if (!isFile) {
             DynArray_free(newNode->dirChildren);
             DynArray_free(newNode->fileChildren);
         }
         Path_free(newNode->path);
         free(newNode);
-        *poNResult = NULL;
+        *resultNode = NULL;
         return status;
     }
 
-    /* Add the new node as a child of the parent */
-    if (oNParent != NULL) {
-        status = NodeFT_insertChild(oNParent, newNode, bIsFile);
+    /* add the new node as a child of the parent */
+    if (parent != NULL) {
+        status = NodeFT_insertChild(parent, newNode, isFile);
         if (status != SUCCESS) {
-            /* Cleanup in case of failure */
-            if (!bIsFile) {
+            /* cleanup in case of failure */
+            if (!isFile) {
                 DynArray_free(newNode->dirChildren);
                 DynArray_free(newNode->fileChildren);
             }
             Path_free(newNode->path);
             free(newNode);
-            *poNResult = NULL;
+            *resultNode = NULL;
             return status;
         }
     }
 
-    *poNResult = newNode;
+    *resultNode = newNode;
     return SUCCESS;
 }
 
-/* See nodeFT.h for specification */
-size_t NodeFT_free(Node_T oNNode) {
+/*
+  recursively frees the subtree rooted at node, including node itself.
+  returns the total number of nodes freed.
+*/
+size_t NodeFT_free(Node_T node) {
     size_t freedNodes = 0;
 
-    assert(oNNode != NULL);
+    assert(node != NULL);
 
-    /* Remove the node from its parent's child array */
-    NodeFT_removeFromParent(oNNode);
+    /* remove the node from its parent's child array */
+    NodeFT_removeFromParent(node);
 
-    /* Recursively free children if directory */
-    if (!oNNode->isFile) {
-        /* Free directory children */
-        while (DynArray_getLength(oNNode->dirChildren) > 0) {
-            Node_T childNode = DynArray_get(oNNode->dirChildren, 0);
+    /* recursively free children if directory */
+    if (!node->isFile) {
+        /* free directory children */
+        while (DynArray_getLength(node->dirChildren) > 0) {
+            Node_T childNode = DynArray_get(node->dirChildren, 0);
             freedNodes += NodeFT_free(childNode);
         }
-        DynArray_free(oNNode->dirChildren);
+        DynArray_free(node->dirChildren);
 
-        /* Free file children */
-        while (DynArray_getLength(oNNode->fileChildren) > 0) {
-            Node_T childNode = DynArray_get(oNNode->fileChildren, 0);
+        /* free file children */
+        while (DynArray_getLength(node->fileChildren) > 0) {
+            Node_T childNode = DynArray_get(node->fileChildren, 0);
             freedNodes += NodeFT_free(childNode);
         }
-        DynArray_free(oNNode->fileChildren);
+        DynArray_free(node->fileChildren);
     } else {
-        /* Free file contents if any */
-        if (oNNode->contents != NULL)
-            free(oNNode->contents);
+        /* free file contents if any */
+        if (node->contents != NULL)
+            free(node->contents);
     }
 
-    /* Free the node's path and the node itself */
-    Path_free(oNNode->path);
-    free(oNNode);
+    /* free the node's path and the node itself */
+    Path_free(node->path);
+    free(node);
     freedNodes++;
 
     return freedNodes;
 }
 
-/* See nodeFT.h for specification */
-Path_T NodeFT_getPath(Node_T oNNode) {
-    assert(oNNode != NULL);
+/*
+  returns the path object representing node's absolute path.
+*/
+Path_T NodeFT_getPath(Node_T node) {
+    assert(node != NULL);
 
-    return oNNode->path;
+    return node->path;
 }
 
-/* See nodeFT.h for specification */
-boolean NodeFT_hasChild(Node_T oNParent, Path_T oPPath, size_t *pulChildID, boolean bIsFile) {
+/*
+  checks if parent has a child node with path childPath and type isFile.
+  if such a child exists, stores its index in *childIndexPtr and returns TRUE.
+  otherwise, stores the index where such a child would be inserted and returns FALSE.
+*/
+boolean NodeFT_hasChild(Node_T parent, Path_T childPath, size_t *childIndexPtr, boolean isFile) {
     DynArray_T childArray;
     const char *childPathStr;
     int found;
 
-    assert(oNParent != NULL);
-    assert(oPPath != NULL);
-    assert(pulChildID != NULL);
+    assert(parent != NULL);
+    assert(childPath != NULL);
+    assert(childIndexPtr != NULL);
 
-    /* Choose the correct child array */
-    if (bIsFile)
-        childArray = oNParent->fileChildren;
+    /* choose the correct child array */
+    if (isFile)
+        childArray = parent->fileChildren;
     else
-        childArray = oNParent->dirChildren;
+        childArray = parent->dirChildren;
 
-    childPathStr = Path_getPathname(oPPath);
+    childPathStr = Path_getPathname(childPath);
 
-    /* Search for the child */
-    found = DynArray_bsearch(childArray, (void *)childPathStr, pulChildID, NodeFT_comparePathString);
+    /* search for the child */
+    found = DynArray_bsearch(childArray, (void *)childPathStr, childIndexPtr, NodeFT_comparePathString);
 
     return found;
 }
 
-/* See nodeFT.h for specification */
-size_t NodeFT_getNumChildren(Node_T oNParent, boolean bIsFile) {
+/*
+  returns the number of children of parent of type isFile.
+*/
+size_t NodeFT_getNumChildren(Node_T parent, boolean isFile) {
     DynArray_T childArray;
 
-    assert(oNParent != NULL);
-    assert(!oNParent->isFile);
+    assert(parent != NULL);
+    assert(!parent->isFile);
 
-    /* Choose the correct child array */
-    if (bIsFile)
-        childArray = oNParent->fileChildren;
+    /* choose the correct child array */
+    if (isFile)
+        childArray = parent->fileChildren;
     else
-        childArray = oNParent->dirChildren;
+        childArray = parent->dirChildren;
 
     return DynArray_getLength(childArray);
 }
 
-/* See nodeFT.h for specification */
-int NodeFT_getChild(Node_T oNParent, size_t ulChildID, Node_T *poNResult, boolean bIsFile) {
+/*
+  retrieves the child node of parent at index childID of type isFile.
+  on success, stores the child in *resultNode and returns SUCCESS.
+  on failure, sets *resultNode to NULL and returns NO_SUCH_PATH.
+*/
+int NodeFT_getChild(Node_T parent, size_t childID, Node_T *resultNode, boolean isFile) {
     DynArray_T childArray;
 
-    assert(oNParent != NULL);
-    assert(poNResult != NULL);
-    assert(!oNParent->isFile);
+    assert(parent != NULL);
+    assert(resultNode != NULL);
+    assert(!parent->isFile);
 
-    /* Choose the correct child array */
-    if (bIsFile)
-        childArray = oNParent->fileChildren;
+    /* choose the correct child array */
+    if (isFile)
+        childArray = parent->fileChildren;
     else
-        childArray = oNParent->dirChildren;
+        childArray = parent->dirChildren;
 
-    /* Check if the index is within bounds */
-    if (ulChildID >= DynArray_getLength(childArray)) {
-        *poNResult = NULL;
+    /* check if the index is within bounds */
+    if (childID >= DynArray_getLength(childArray)) {
+        *resultNode = NULL;
         return NO_SUCH_PATH;
     }
 
-    /* Retrieve the child node */
-    *poNResult = DynArray_get(childArray, ulChildID);
+    /* retrieve the child node */
+    *resultNode = DynArray_get(childArray, childID);
     return SUCCESS;
 }
 
-/* See nodeFT.h for specification */
-int NodeFT_getContents(Node_T oNNode, void **ppvResult) {
-    assert(ppvResult != NULL);
+/*
+  if node is a file node, stores its contents in *contentsPtr and returns SUCCESS.
+  on failure, sets *contentsPtr to NULL and returns NO_SUCH_PATH.
+*/
+int NodeFT_getContents(Node_T node, void **contentsPtr) {
+    assert(contentsPtr != NULL);
 
-    if (oNNode == NULL)
+    if (node == NULL)
         return NO_SUCH_PATH;
 
-    *ppvResult = oNNode->contents;
+    *contentsPtr = node->contents;
     return SUCCESS;
 }
 
-/* See nodeFT.h for specification */
-int NodeFT_getContentLength(Node_T oNNode, size_t *pulLength) {
-    assert(pulLength != NULL);
+/*
+  if node is a file node, stores the length of its contents in *lengthPtr and returns SUCCESS.
+  on failure, sets *lengthPtr to 0 and returns NO_SUCH_PATH.
+*/
+int NodeFT_getContentLength(Node_T node, size_t *lengthPtr) {
+    assert(lengthPtr != NULL);
 
-    if (oNNode == NULL)
+    if (node == NULL)
         return NO_SUCH_PATH;
 
-    *pulLength = oNNode->contentLength;
+    *lengthPtr = node->contentLength;
     return SUCCESS;
 }
 
-/* See nodeFT.h for specification */
-int NodeFT_setContents(Node_T oNNode, void *pvContents, size_t ulLength) {
-    assert(oNNode != NULL);
+/*
+  sets the contents of file node to newContents of length newLength.
+  returns SUCCESS on success, or appropriate error code on failure.
+*/
+int NodeFT_setContents(Node_T node, void *newContents, size_t newLength) {
+    assert(node != NULL);
 
-    /* Free existing contents if any */
-    if (oNNode->contents != NULL)
-        free(oNNode->contents);
+    /* free existing contents if any */
+    if (node->contents != NULL)
+        free(node->contents);
 
-    if (pvContents != NULL && ulLength > 0) {
-        /* Allocate memory and copy new contents */
-        oNNode->contents = malloc(ulLength);
-        if (oNNode->contents == NULL) {
-            oNNode->contentLength = 0;
+    if (newContents != NULL && newLength > 0) {
+        /* allocate memory and copy new contents */
+        node->contents = malloc(newLength);
+        if (node->contents == NULL) {
+            node->contentLength = 0;
             return MEMORY_ERROR;
         }
-        memcpy(oNNode->contents, pvContents, ulLength);
-        oNNode->contentLength = ulLength;
+        memcpy(node->contents, newContents, newLength);
+        node->contentLength = newLength;
     } else {
-        /* Set contents to NULL if no contents provided */
-        oNNode->contents = NULL;
-        oNNode->contentLength = 0;
+        /* set contents to NULL if no contents provided */
+        node->contents = NULL;
+        node->contentLength = 0;
     }
 
     return SUCCESS;
 }
 
-/* See nodeFT.h for specification */
-boolean NodeFT_isFile(Node_T oNNode) {
-    if (oNNode == NULL)
+/*
+  returns TRUE if node is a file, FALSE if it is a directory.
+*/
+boolean NodeFT_isFile(Node_T node) {
+    if (node == NULL)
         return FALSE;
 
-    return oNNode->isFile;
+    return node->isFile;
 }
 
-/* See nodeFT.h for specification */
-Node_T NodeFT_getParent(Node_T oNNode) {
-    assert(oNNode != NULL);
+/*
+  returns the parent of node. if node is the root node, returns NULL.
+*/
+Node_T NodeFT_getParent(Node_T node) {
+    assert(node != NULL);
 
-    return oNNode->parent;
+    return node->parent;
 }
 
-/* See nodeFT.h for specification */
-char *NodeFT_toString(Node_T oNNode) {
+/*
+  generates a string representation of node.
+  the caller is responsible for freeing the allocated memory.
+  returns NULL if memory allocation fails.
+*/
+char *NodeFT_toString(Node_T node) {
     const char *pathStr = NULL;
     const char *typePrefix = NULL;
     char *resultStr = NULL;
     size_t totalLength;
 
-    assert(oNNode != NULL);
+    assert(node != NULL);
 
-    /* Get the string representation of the node's path */
-    pathStr = Path_getPathname(oNNode->path);
+    /* get the string representation of the node's path */
+    pathStr = Path_getPathname(node->path);
     if (pathStr == NULL)
         return NULL;
 
-    /* Determine the node type */
-    if (oNNode->isFile)
+    /* determine the node type */
+    if (node->isFile)
         typePrefix = "File: ";
     else
         typePrefix = "Dir:  ";
 
-    /* Calculate total length and allocate memory */
+    /* calculate total length and allocate memory */
     totalLength = strlen(typePrefix) + strlen(pathStr) + 1;
     resultStr = (char *)malloc(totalLength);
     if (resultStr == NULL) {
-        /* No need to free pathStr as it's managed elsewhere */
+        /* no need to free pathStr as it's managed elsewhere */
         return NULL;
     }
 
-    /* Construct the final string */
+    /* construct the final string */
     strcpy(resultStr, typePrefix);
     strcat(resultStr, pathStr);
 
-    /* No need to free pathStr as it's managed elsewhere */
+    /* no need to free pathStr as it's managed elsewhere */
 
     return resultStr;
 }

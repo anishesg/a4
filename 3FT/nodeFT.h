@@ -1,6 +1,6 @@
 /*--------------------------------------------------------------------*/
 /* nodeFT.h                                                           */
-/* Author:  anish                                              */
+/* Author: anish                                                      */
 /*--------------------------------------------------------------------*/
 
 #ifndef NODEFT_INCLUDED
@@ -18,82 +18,82 @@
 typedef struct node *Node_T;
 
 /*
-  Constructs a new node with the specified path `oPPath`, parent `oNParent`,
-  and type determined by `bIsFile` (TRUE for files, FALSE for directories).
-  On success, stores the new node in `*poNResult` and returns SUCCESS.
-  On failure, sets `*poNResult` to NULL and returns:
+  constructs a new node with the specified path `path`, parent `parent`,
+  and type determined by `isFile` (TRUE for files, FALSE for directories).
+  on success, stores the new node in `*resultNode` and returns SUCCESS.
+  on failure, sets `*resultNode` to NULL and returns:
   * MEMORY_ERROR if memory allocation fails
-  * CONFLICTING_PATH if `oNParent`'s path is not a prefix of `oPPath`
-  * NO_SUCH_PATH if `oPPath` is invalid, or `oNParent` is NULL but `oPPath` is not root,
-                 or `oNParent`'s path is not the immediate parent of `oPPath`
-  * ALREADY_IN_TREE if a child with `oPPath` already exists under `oNParent`
+  * CONFLICTING_PATH if `parent`'s path is not a prefix of `path`
+  * NO_SUCH_PATH if `path` is invalid, or `parent` is NULL but `path` is not root,
+                 or `parent`'s path is not the immediate parent of `path`
+  * ALREADY_IN_TREE if a child with `path` already exists under `parent`
 */
-int NodeFT_new(Path_T oPPath, Node_T oNParent, boolean bIsFile, Node_T *poNResult);
+int NodeFT_new(Path_T path, Node_T parent, boolean isFile, Node_T *resultNode);
 
 /*
-  Recursively frees the subtree rooted at `oNNode`, including `oNNode` itself.
-  Returns the total number of nodes freed.
+  recursively frees the subtree rooted at `node`, including `node` itself.
+  returns the total number of nodes freed.
 */
-size_t NodeFT_free(Node_T oNNode);
+size_t NodeFT_free(Node_T node);
 
-/* Returns the path object representing `oNNode`'s absolute path. */
-Path_T NodeFT_getPath(Node_T oNNode);
+/* returns the path object representing `node`'s absolute path. */
+Path_T NodeFT_getPath(Node_T node);
 
 /*
-  Checks if `oNParent` has a child node with path `oPPath` and type specified by `bIsFile`.
-  If such a child exists, stores its index in `*pulChildID` and returns TRUE.
-  Otherwise, stores the index where such a child would be inserted in `*pulChildID` and returns FALSE.
+  checks if `parent` has a child node with path `childPath` and type specified by `isFile`.
+  if such a child exists, stores its index in `*childIndexPtr` and returns TRUE.
+  otherwise, stores the index where such a child would be inserted in `*childIndexPtr` and returns FALSE.
 */
-boolean NodeFT_hasChild(Node_T oNParent, Path_T oPPath, size_t *pulChildID, boolean bIsFile);
+boolean NodeFT_hasChild(Node_T parent, Path_T childPath, size_t *childIndexPtr, boolean isFile);
 
-/* Returns the number of children of `oNParent` of type specified by `bIsFile`. */
-size_t NodeFT_getNumChildren(Node_T oNParent, boolean bIsFile);
+/* returns the number of children of `parent` of type specified by `isFile`. */
+size_t NodeFT_getNumChildren(Node_T parent, boolean isFile);
 
 /*
-  Retrieves the child node of `oNParent` at index `ulChildID` of type specified by `bIsFile`.
-  On success, stores the child in `*poNResult` and returns SUCCESS.
-  On failure, sets `*poNResult` to NULL and returns:
-  * NO_SUCH_PATH if `ulChildID` is out of bounds
+  retrieves the child node of `parent` at index `childID` of type specified by `isFile`.
+  on success, stores the child in `*resultNode` and returns SUCCESS.
+  on failure, sets `*resultNode` to NULL and returns:
+  * NO_SUCH_PATH if `childID` is out of bounds
 */
-int NodeFT_getChild(Node_T oNParent, size_t ulChildID, Node_T *poNResult, boolean bIsFile);
+int NodeFT_getChild(Node_T parent, size_t childID, Node_T *resultNode, boolean isFile);
 
 /*
-  If `oNNode` is a file node, stores its contents in `*ppvResult` and returns SUCCESS.
-  On failure, sets `*ppvResult` to NULL and returns:
-  * NO_SUCH_PATH if `oNNode` is NULL
+  if `node` is a file node, stores its contents in `*contentsPtr` and returns SUCCESS.
+  on failure, sets `*contentsPtr` to NULL and returns:
+  * NO_SUCH_PATH if `node` is NULL
 */
-int NodeFT_getContents(Node_T oNNode, void **ppvResult);
+int NodeFT_getContents(Node_T node, void **contentsPtr);
 
 /*
-  If `oNNode` is a file node, stores the length of its contents in `*pulLength` and returns SUCCESS.
-  On failure, sets `*pulLength` to 0 and returns:
-  * NO_SUCH_PATH if `oNNode` is NULL
+  if `node` is a file node, stores the length of its contents in `*lengthPtr` and returns SUCCESS.
+  on failure, sets `*lengthPtr` to 0 and returns:
+  * NO_SUCH_PATH if `node` is NULL
 */
-int NodeFT_getContentLength(Node_T oNNode, size_t *pulLength);
+int NodeFT_getContentLength(Node_T node, size_t *lengthPtr);
 
 /*
-  Sets the contents of file node `oNNode` to `pvContents` of length `ulLength`.
-  Returns SUCCESS on success. On failure, returns:
+  sets the contents of file node `node` to `newContents` of length `newLength`.
+  returns SUCCESS on success. on failure, returns:
   * MEMORY_ERROR if memory allocation fails
-  * NO_SUCH_PATH if `oNNode` is NULL
+  * NO_SUCH_PATH if `node` is NULL
 */
-int NodeFT_setContents(Node_T oNNode, void *pvContents, size_t ulLength);
+int NodeFT_setContents(Node_T node, void *newContents, size_t newLength);
 
 /*
-  Returns TRUE if `oNNode` is a file, FALSE if it is a directory.
+  returns TRUE if `node` is a file, FALSE if it is a directory.
 */
-boolean NodeFT_isFile(Node_T oNNode);
+boolean NodeFT_isFile(Node_T node);
 
 /*
-  Returns the parent of `oNNode`. If `oNNode` is the root node, returns NULL.
+  returns the parent of `node`. if `node` is the root node, returns NULL.
 */
-Node_T NodeFT_getParent(Node_T oNNode);
+Node_T NodeFT_getParent(Node_T node);
 
 /*
-  Generates a string representation of `oNNode`.
-  The caller is responsible for freeing the allocated memory.
-  Returns NULL if memory allocation fails.
+  generates a string representation of `node`.
+  the caller is responsible for freeing the allocated memory.
+  returns NULL if memory allocation fails.
 */
-char *NodeFT_toString(Node_T oNNode);
+char *NodeFT_toString(Node_T node);
 
 #endif
