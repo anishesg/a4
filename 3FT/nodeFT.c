@@ -496,6 +496,5 @@ char *NodeFT_toString(Node_T node) {
     strcat(resultStr, pathStr);
 
     /* no need to free pathStr as it's managed elsewhere */
-
     return resultStr;
 }

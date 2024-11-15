@@ -3,12 +3,12 @@ Assignment 4 readme File
 ------------------------------------------------------------------------
 Student 1: What is your name?
 
-
+Anish Kataria
 
 ------------------------------------------------------------------------
 Student 2: What is your name?
 
-
+N/A
 
 ------------------------------------------------------------------------
 Student 1: What authorized sources of information did you use to
@@ -16,6 +16,7 @@ complete the assignment? COPY THE LIST of authorized sources of
 information given in the "Policies" web page (also available on armlab
 in the file ~cos217/AuthorizedSourcesList ) to this section of the
 readme file, and edit it as appropriate.
+
 
 
 
@@ -40,7 +41,7 @@ nature of the interaction, may additionally require the interaction
 being reported to the Committee on Discipline. Write "None" if you used
 no unauthorized sources of information.
 
-
+None
 
 ------------------------------------------------------------------------
 Student 2: What unauthorized sources of information did you use to
@@ -64,7 +65,7 @@ guide, enter your name in the space below the following affirmation:
 This paper represents my own work in accordance with University
 regulations.
 
-
+Anish Kataria
 
 ------------------------------------------------------------------------
 Student 2: In fulfillment of the requirement from section 2.4.3 of the
@@ -80,7 +81,9 @@ regulations.
 Student 1: What is your assessment of the assignment? Was it helpful?
 Was it fun?
 
-
+Definitely helpful in diving deeper into a codebase and learning to 
+build on existing code. At some point, the grind of doing this 
+assignment became a spiteful endeavor, at which point it was fun!
 
 ------------------------------------------------------------------------
 Student 2: What is your assessment of the assignment? Was it helpful?
@@ -101,7 +104,7 @@ your disagreements with them? Copy the splint warnings here, and
 express your disagreement after each warning. If there are no
 warnings, then write "None."
 
-
+None
 
 ------------------------------------------------------------------------
 What warnings does critTer generate on checkerDT.c, and what are your
@@ -109,7 +112,7 @@ disagreements with them? Copy the critTer warnings here, and express
 your disagreement after each warning. If there are no warnings, then
 write "None."
 
-
+None
 
 ------------------------------------------------------------------------
 What warnings does splint generate on your Part 3 code, and what are
@@ -125,7 +128,38 @@ your disagreements with them? Copy the critTer warnings here, and
 express your disagreement after each warning. If there are no
 warnings, then write "None."
 
+ ft.c: line 157: low priority: 
+   A loop should consist of fewer than 35 lines;
+   this loop consists of 45 lines; consider refactoring
 
+   ft.c: line 894: low priority: 
+   A file should contain no more than 15 functions;
+   this file contains 16 functions
+
+   ft.c: line 491: medium priority:
+   Do you want to validate 'pvContents' through an assert?
+
+   ft.c: line 741: medium priority:
+   Do you want to validate 'pvNewContents' through an assert?
+
+   ft.c: line 893: low priority: 
+   A source code file should contain fewer than 500 lines;
+   this file contains 894 lines
+
+   defense:
+	•	ft.c: line 96: low priority:
+the loop’s length is necessary for clarity and cannot be shortened. 
+when tried, immediatly had errors.
+	•	ft.c: line 847: low priority:
+having 16 functions is acceptable to maintain cohesive functionality.
+this allowed me to split up key parts into helper functions to help with gdb.
+	•	ft.c: line 432: medium priority:
+asserting ‘pvContents’ isn’t needed as NULL contents are valid.
+	•	ft.c: line 701: medium priority:
+‘pvNewContents’ can be NULL to clear contents, so no assert is required.
+	•	ft.c: line 846: low priority:
+the file length is justified by the complexity of the code and is mostly
+due to comments. 
 
 ------------------------------------------------------------------------
 For each of the five faulty BDT implementations required by Step
@@ -137,15 +171,15 @@ the error manifests itself or is "noticed" by the client.
 
       Executable         Function with the underlying error
 ===============================================================
-         ./bdtBad1        
+         ./bdtBad1            BDT_insert   
 ---------------------------------------------------------------
-         ./bdtBad2        
+         ./bdtBad2             BDT_freeSubtree
 ---------------------------------------------------------------
-         ./bdtBad3        
+         ./bdtBad3            BDT_addChild
 ---------------------------------------------------------------
-         ./bdtBad4        
+         ./bdtBad4             BDT_strlenAccumulate
 ---------------------------------------------------------------
-         ./bdtBad5        
+         ./bdtBad5            BDT_findNode
 ===============================================================
 
 ------------------------------------------------------------------------
