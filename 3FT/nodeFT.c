@@ -379,6 +379,9 @@ int NodeFT_new(Path_T path, Node_T parent, boolean isFile, Node_T *resultNode) {
     if (status != SUCCESS)
         return status;
 
+    /* At this point, newNode should not be NULL */
+    assert(newNode != NULL);
+
     /* Validate the parent-child relationship */
     status = NodeFT_validateParentChild(parent, newNode);
     if (status != SUCCESS) {
