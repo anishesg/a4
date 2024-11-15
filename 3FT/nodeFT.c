@@ -138,13 +138,13 @@ static void NodeFT_removeFromParent(Node_T node);
     - A positive value if node1 > node2
 */
 static int NodeFT_compareNodes(const void *node1, const void *node2) {
-    const Node_T n1 = (const Node_T)node1;
-    const Node_T n2 = (const Node_T)node2;
+    const Node_T firstNode = (const Node_T)node1;
+    const Node_T secondNode = (const Node_T)node2;
 
-    assert(n1 != NULL);
-    assert(n2 != NULL);
+    assert(firstNode != NULL);
+    assert(secondNode != NULL);
 
-    return Path_comparePath(n1->path, n2->path);
+    return Path_comparePath(firstNode->path, secondNode->path);
 }
 
 /*

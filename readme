@@ -17,7 +17,11 @@ information given in the "Policies" web page (also available on armlab
 in the file ~cos217/AuthorizedSourcesList ) to this section of the
 readme file, and edit it as appropriate.
 
+The course's lectures.
 
+The course's precepts.
+
+The course's website.
 
 
 ------------------------------------------------------------------------
@@ -120,7 +124,75 @@ your disagreements with them? Copy the splint warnings here, and
 express your disagreement after each warning. If there are no
 warnings, then write "None."
 
+ft.h:26:5: Function FT_init exported but not declared in header file
+  A declaration is exported, but does not appear in a header file. (Use
+  -exportheader to inhibit warning)
+   ft.c:355:1: Definition of FT_init
+ft.h:34:5: Function FT_destroy exported but not declared in header file
+   ft.c:375:1: Definition of FT_destroy
+ft.h:47:5: Function FT_insertDir exported but not declared in header file
+   ft.c:476:1: Definition of FT_insertDir
+ft.h:62:5: Function FT_insertFile exported but not declared in header file
+   ft.c:591:1: Definition of FT_insertFile
+ft.h:75:5: Function FT_rmDir exported but not declared in header file
+   ft.c:628:1: Definition of FT_rmDir
+ft.h:88:5: Function FT_rmFile exported but not declared in header file
+   ft.c:661:1: Definition of FT_rmFile
+ft.h:94:9: Function FT_containsDir exported but not declared in header file
+   ft.c:684:1: Definition of FT_containsDir
+ft.h:100:9: Function FT_containsFile exported but not declared in header file
+   ft.c:703:1: Definition of FT_containsFile
+ft.h:109:7: Function FT_getFileContents exported but not declared in header
+               file
+   ft.c:733:1: Definition of FT_getFileContents
+ft.h:117:7: Function FT_replaceFileContents exported but not declared in header
+               file
+   ft.c:785:1: Definition of FT_replaceFileContents
+ft.h:135:5: Function FT_stat exported but not declared in header file
+   ft.c:828:1: Definition of FT_stat
+ft.h:149:7: Function FT_toString exported but not declared in header file
+   ft.c:894:1: Definition of FT_toString
+nodeFT.h:41:5: Function NodeFT_new exported but not declared in header file
+   nodeFT.c:417:1: Definition of NodeFT_new
+nodeFT.h:52:8: Function NodeFT_free exported but not declared in header file
+   nodeFT.c:463:1: Definition of NodeFT_free
+nodeFT.h:63:8: Function NodeFT_getPath exported but not declared in header file
+   nodeFT.c:478:1: Definition of NodeFT_getPath
+nodeFT.h:81:9: Function NodeFT_hasChild exported but not declared in header
+                  file
+   nodeFT.c:514:1: Definition of NodeFT_hasChild
+nodeFT.h:93:8: Function NodeFT_getNumChildren exported but not declared in
+                  header file
+   nodeFT.c:536:1: Definition of NodeFT_getNumChildren
+nodeFT.h:111:5: Function NodeFT_getChild exported but not declared in header
+                   file
+   nodeFT.c:573:1: Definition of NodeFT_getChild
+nodeFT.h:126:5: Function NodeFT_getContents exported but not declared in header
+                   file
+   nodeFT.c:595:1: Definition of NodeFT_getContents
+nodeFT.h:141:5: Function NodeFT_getContentLength exported but not declared in
+                   header file
+   nodeFT.c:617:1: Definition of NodeFT_getContentLength
+nodeFT.h:155:5: Function NodeFT_setContents exported but not declared in header
+                   file
+   nodeFT.c:654:1: Definition of NodeFT_setContents
+nodeFT.h:167:9: Function NodeFT_isFile exported but not declared in header file
+   nodeFT.c:671:1: Definition of NodeFT_isFile
+nodeFT.h:179:8: Function NodeFT_getParent exported but not declared in header
+                   file
+   nodeFT.c:687:1: Definition of NodeFT_getParent
+nodeFT.h:194:7: Function NodeFT_toString exported but not declared in header
+                   file
+   nodeFT.c:732:1: Definition of NodeFT_toString
 
+Finished checking --- 48 code warnings
+
+for all these errors related to my code:
+
+I keep internal helper functions as static within their source files
+to ensure they remain encapsulated and aren’t exposed externally. 
+This maintains a clean interface and prevents Splint from incorrectly 
+flagging them as exported without declarations.
 
 ------------------------------------------------------------------------
 What warnings does critTer generate on your Part 3 code, and what are
@@ -159,7 +231,44 @@ asserting ‘pvContents’ isn’t needed as NULL contents are valid.
 ‘pvNewContents’ can be NULL to clear contents, so no assert is required.
 	•	ft.c: line 846: low priority:
 the file length is justified by the complexity of the code and is mostly
-due to comments. 
+due to detailed comments. 
+
+defense:
+    •	nodeFT.c: line 732: low priority:
+      A file should contain no more than 15 functions; this file contains 18 functions
+      Defense:
+      Having 18 functions in `nodeFT.c` is justified to maintain cohesive functionality.
+       Each function serves purpose in managing nodes w/ clear separation of concerns 
+
+    •	nodeFT.c: line 140: medium priority:
+      Do you want to validate 'node1' through an assert?
+      Defense:
+      The variables 'node1' and 'node2' are validated through other mechanisms 
+    •	nodeFT.c: line 140: medium priority:
+      Do you want to validate 'node2' through an assert?
+      Defense:
+      The variables 'node1' and 'node2' are validated through other mechanisms
+
+    •	nodeFT.c: line 162: medium priority:
+      Do you want to validate 'nodePtr' through an assert?
+      Defense:
+      The function already includes comprehensive checks and handles `NULL` scenarios 
+
+    •	nodeFT.c: line 162: medium priority:
+      Do you want to validate 'pathStrPtr' through an assert?
+      Defense:
+      The function already includes comprehensive checks and handles `NULL` scenarios 
+    •	nodeFT.c: line 631: medium priority:
+      Do you want to validate 'newContents' through an assert?
+      Defense:
+      Allowing `newContents` to be `NULL` is intentional, 
+      as it signifies clearing the file's contents. 
+
+    •	nodeFT.c: line 731: low priority:
+      A source code file should contain fewer than 500 lines; this file contains 732 lines
+      Defense:
+      The file length is justified by the complexity of the code, mostly due to comments
+
 
 ------------------------------------------------------------------------
 For each of the five faulty BDT implementations required by Step
@@ -187,5 +296,23 @@ What are your critiques of the given DT implementations, as
 specified in Step 2.5?
 
 
+critiques:
+- inconsistent parameter orders in nodedtgood.c:
+  functions like node_new, node_haschild, and node_getchild have varying parameter sequences
+  
+- redundant functions node_getchild and node_haschild:
+  node_haschild can be integrated into node_getchild by 
+  returning a specific value when a child doesn't exist
 
+- unnecessary helper functions in dt_tostring:
+  functions like dt_strlenaccumulate could be merged 
+  into dt_tostring to simplify 
+
+- unclear variable naming in dt_preordertTraversal:
+  using non-descriptive variable names like random letters reduces  
+  readabilit/ maintainability.
+
+- improve naming of enums:
+  enums such as bad, conflicting, and no_such_path are vague;
+   more descriptive to help understand
 ------------------------------------------------------------------------
