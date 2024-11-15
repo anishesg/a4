@@ -12,7 +12,6 @@
 #include "dynarray.h"
 #include "path.h"
 #include "nodeFT.h"
-#include "checkerFT.h"
 #include "ft.h"
 
 /*
